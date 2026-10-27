@@ -27,7 +27,7 @@ from app.database import (
 
 app = FastAPI(
     title="Sheets LLM Backend API",
-    description="Otomatisasi pembaca Google Sheets, zero-shot LLM schema harmonization, dan konsolidasi data multi-sheet.",
+    description="Otomatisasi pembacaan Google Sheets, standarisasi nama kolom, dan penggabungan data spreadsheet.",
     version="2.0.0"
 )
 
@@ -85,9 +85,7 @@ def view_dashboard():
 @app.post("/api/harmonize-schema", response_model=HarmonizationResult)
 def preview_harmonization(payload: MultiSheetConsolidateRequest):
     """
-    Zero-Shot Schema Discovery via LLM.
-    Menerima N sheet dengan nama kolom acak, mengembalikan skema kanonikal & pemetaan tiap sheet.
-    Tanpa kamus manual.
+    Menemukan nama kolom standar dari beberapa sheet secara otomatis tanpa kamus manual.
     """
     if not payload.sheets:
         raise HTTPException(status_code=400, detail="Daftar sheet tidak boleh kosong")
@@ -100,15 +98,12 @@ def preview_harmonization(payload: MultiSheetConsolidateRequest):
             sheet_mappings=harmonized["sheet_mappings"]
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal melakukan harmonisasi LLM: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Gagal memproses nama kolom: {str(e)}")
 
 @app.post("/api/consolidate", response_model=ConsolidatedDataset)
 def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
     """
-    Konsolidasi Multi-Sheet ke 1 Tabel Baku Terstruktur.
-    1. Kirim semua sheet ke LLM untuk harmonisasi skema serentak.
-    2. Transformasi semua baris data dari masing-masing sheet ke skema kanonikal.
-    3. Simpan ke database & kembalikan 1 dataset utuh yang seragam.
+    Menggabungkan banyak sheet menjadi 1 tabel data yang rapi dan terstruktur.
     """
     if not payload.sheets:
         raise HTTPException(status_code=400, detail="Daftar sheet tidak boleh kosong")
@@ -118,7 +113,7 @@ def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
     try:
         harmonized = harmonize_sheets_schema(sheets_data)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal harmonisasi via LLM: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Gagal memproses data: {str(e)}")
 
     canonical_fields = harmonized.get("canonical_fields", [])
     sheet_mappings = harmonized.get("sheet_mappings", {})

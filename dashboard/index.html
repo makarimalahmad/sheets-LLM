@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Data Harmonization Dashboard</title>
+  <title>Dashboard Penggabungan Data Spreadsheet</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen">
   <div class="max-w-7xl mx-auto px-4 py-8">
     <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b pb-4 gap-4">
       <div>
-        <h1 class="text-2xl font-bold text-slate-900">Data Harmonization Dashboard</h1>
-        <p class="text-sm text-slate-500">Standarisasi dan Konsolidasi Kolom Spreadsheet via AI</p>
+        <h1 class="text-2xl font-bold text-slate-900">Dashboard Sheets LLM</h1>
+        <p class="text-sm text-slate-500">Otomatis menyamakan nama kolom yang berbeda dan menggabungkan datanya</p>
       </div>
       <div class="flex gap-2">
         <a href="/docs" target="_blank" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded text-sm font-medium">Dokumentasi API</a>
@@ -21,45 +21,45 @@
 
     <!-- Navigasi Tab -->
     <div class="flex border-b border-slate-200 mb-6 gap-4">
-      <button id="tab-btn-multi" onclick="switchTab('multi')" class="py-2 px-4 border-b-2 font-semibold text-sm border-blue-600 text-blue-600">Konsolidasi Spreadsheet</button>
-      <button id="tab-btn-single" onclick="switchTab('single')" class="py-2 px-4 border-b-2 font-semibold text-sm border-transparent text-slate-500 hover:text-slate-700">Ringkasan Data & Ingest</button>
+      <button id="tab-btn-multi" onclick="switchTab('multi')" class="py-2 px-4 border-b-2 font-semibold text-sm border-blue-600 text-blue-600">Gabungkan Banyak Sheet</button>
+      <button id="tab-btn-single" onclick="switchTab('single')" class="py-2 px-4 border-b-2 font-semibold text-sm border-transparent text-slate-500 hover:text-slate-700">Ringkasan Data & Input Cepat</button>
     </div>
 
-    <!-- TAB 1: KONSOLIDASI MULTI-SHEET -->
+    <!-- TAB 1: GABUNGKAN BANYAK SHEET -->
     <div id="tab-multi" class="space-y-6">
       <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
         <div class="flex justify-between items-center mb-4">
           <div>
-            <h2 class="text-lg font-bold text-slate-900">Konsolidasi Data Multi-Sheet</h2>
-            <p class="text-xs text-slate-500">Menyelaraskan nama kolom yang berbeda dari beberapa sheet menjadi satu format standar.</p>
+            <h2 class="text-lg font-bold text-slate-900">Penggabungan Kolom dari Berbagai Sheet</h2>
+            <p class="text-xs text-slate-500">Menyamakan nama kolom yang beda ketikan dari tiap orang menjadi 1 format rapi.</p>
           </div>
           <button onclick="loadMultiSheetSample()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded text-xs font-semibold text-slate-700">Muat Contoh 5 Sheet</button>
         </div>
 
         <div class="mb-4">
-          <label class="block text-xs font-medium text-slate-600 mb-1">Payload JSON:</label>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Data Spreadsheet (Format JSON):</label>
           <textarea id="multi-sheet-json" rows="10" class="w-full text-xs p-3 border rounded border-slate-300 font-mono bg-slate-900 text-emerald-400"></textarea>
         </div>
 
         <button id="btn-run-harmonize" onclick="runConsolidation()" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium text-sm flex justify-center items-center gap-2">
-          <span>Proses Konsolidasi</span>
+          <span>Gabungkan Semua Sheet</span>
         </button>
       </div>
 
-      <!-- Hasil Harmonisasi Skema -->
+      <!-- Hasil Penyelarasan Kolom -->
       <div id="multi-result-container" class="hidden space-y-6">
         <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
-          <h3 class="text-md font-bold text-slate-900 mb-2">1. Skema Standar yang Terbentuk</h3>
+          <h3 class="text-md font-bold text-slate-900 mb-2">1. Nama Kolom Standar yang Dibuat AI</h3>
           <div id="canonical-tags" class="flex flex-wrap gap-2 mb-4"></div>
 
-          <h3 class="text-md font-bold text-slate-900 mb-2">2. Pemetaan Kolom per Sheet</h3>
+          <h3 class="text-md font-bold text-slate-900 mb-2">2. Penyesuaian Kolom Tiap Sheet</h3>
           <div class="overflow-x-auto">
             <pre id="mapping-matrix" class="p-3 bg-slate-100 rounded text-xs text-slate-700 overflow-x-auto font-mono"></pre>
           </div>
         </div>
 
         <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
-          <h3 class="text-md font-bold text-slate-900 mb-3">3. Tabel Data Terkonsolidasi</h3>
+          <h3 class="text-md font-bold text-slate-900 mb-3">3. Tabel Data yang Sudah Digabung Rapi</h3>
           <div class="overflow-x-auto">
             <table class="w-full text-left text-xs border-collapse">
               <thead id="consolidated-table-head" class="bg-slate-100 border-b border-slate-200 text-slate-700 font-semibold"></thead>
@@ -202,7 +202,7 @@
       const btn = document.getElementById('btn-run-harmonize');
       const textVal = document.getElementById('multi-sheet-json').value.trim();
       if (!textVal) {
-        alert("Payload JSON kosong");
+        alert("Data spreadsheet kosong");
         return;
       }
 
@@ -210,12 +210,12 @@
       try {
         payload = JSON.parse(textVal);
       } catch (e) {
-        alert("Format JSON tidak valid: " + e.message);
+        alert("Format data tidak valid: " + e.message);
         return;
       }
 
       btn.disabled = true;
-      btn.innerText = "Memproses...";
+      btn.innerText = "Sedang Memproses...";
 
       try {
         const res = await fetch('/api/consolidate', {
@@ -226,21 +226,21 @@
 
         if (!res.ok) {
           const err = await res.json();
-          throw new Error(err.detail || "Gagal memproses konsolidasi");
+          throw new Error(err.detail || "Gagal menggabungkan data");
         }
 
         const data = await res.json();
 
-        // Render Canonical Tags
+        // Render Kolom Standar
         const tagsContainer = document.getElementById('canonical-tags');
         tagsContainer.innerHTML = data.canonical_fields.map(f => `
           <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded font-mono text-xs font-semibold">${f}</span>
         `).join('');
 
-        // Render Mapping Matrix
+        // Render Penyesuaian Kolom
         document.getElementById('mapping-matrix').innerText = JSON.stringify(data.sheet_mappings, null, 2);
 
-        // Render Consolidated Table
+        // Render Tabel Gabungan
         const thead = document.getElementById('consolidated-table-head');
         const cols = ["_source_sheet", ...data.canonical_fields];
         thead.innerHTML = `<tr>${cols.map(c => `<th class="p-2.5">${c}</th>`).join('')}</tr>`;
@@ -262,7 +262,7 @@
         alert("Error: " + err.message);
       } finally {
         btn.disabled = false;
-        btn.innerText = "Proses Konsolidasi";
+        btn.innerText = "Gabungkan Semua Sheet";
       }
     }
 
@@ -337,7 +337,7 @@
       const rowStr = document.getElementById('input-row').value.trim();
 
       if (!headersStr || !rowStr) {
-        alert("Headers dan baris data tidak boleh kosong");
+        alert("Nama kolom dan data baris tidak boleh kosong");
         return;
       }
 
