@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Produk & Analitik Sheets LLM</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+  <div class="max-w-7xl mx-auto px-4 py-8">
+    <header class="flex justify-between items-center mb-8 border-b pb-4">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900">Dashboard Sheets AI Ingestion</h1>
+        <p class="text-sm text-slate-500">Pemetaan Semantik Kolom Otomatis via LLM (openai/gpt-oss-120b)</p>
+      </div>
+      <div class="flex gap-2">
+        <a href="/docs" target="_blank" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded text-sm font-medium">Swagger API Docs</a>
+        <button onclick="refreshData()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium">Refresh Data</button>
+      </div>
+    </header>
+
+    <!-- KPI Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
+        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Total Produk</p>
+        <h3 id="stat-total" class="text-2xl font-bold text-slate-900">0</h3>
+      </div>
+      <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200 border-l-4 border-l-emerald-500">
+        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Harga EUP Termahal</p>
+        <h3 id="stat-max-eup" class="text-2xl font-bold text-emerald-600">Rp 0</h3>
+        <p id="stat-max-source" class="text-xs text-slate-400 mt-1">-</p>
+      </div>
+      <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
+        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Harga EUP Terendah</p>
+        <h3 id="stat-min-eup" class="text-2xl font-bold text-slate-900">Rp 0</h3>
+      </div>
+      <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
+        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Rata-rata Margin</p>
+        <h3 id="stat-avg-margin" class="text-2xl font-bold text-blue-600">Rp 0</h3>
+      </div>
+    </div>
+
+    <!-- Main Grid: Upload Simulator & Table -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <!-- Upload Simulator -->
+      <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200 lg:col-span-1">
+        <h2 class="text-lg font-bold text-slate-900 mb-4">Simulasi Kirim Data Sheets</h2>
+        <div class="mb-4">
+          <label class="block text-xs font-medium text-slate-600 mb-1">Pilih Template Header Sheets:</label>
+          <div class="flex gap-2 mb-3">
+            <button onclick="setTemplate('sheet1')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded text-xs font-medium">Sheet 1 (Panjang)</button>
+            <button onclick="setTemplate('sheet2')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded text-xs font-medium">Sheet 2 (Singkat)</button>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="block text-xs font-medium text-slate-600 mb-1">Nama Sheet / Sumber:</label>
+          <input id="input-source" type="text" value="Demo_Sheet" class="w-full text-xs p-2 border rounded border-slate-300 font-mono">
+        </div>
+
+        <div class="mb-3">
+          <label class="block text-xs font-medium text-slate-600 mb-1">Nama Kolom Header (pisahkan koma):</label>
+          <textarea id="input-headers" rows="3" class="w-full text-xs p-2 border rounded border-slate-300 font-mono"></textarea>
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-xs font-medium text-slate-600 mb-1">Baris Data (pisahkan koma):</label>
+          <textarea id="input-row" rows="2" class="w-full text-xs p-2 border rounded border-slate-300 font-mono"></textarea>
+        </div>
+
+        <button onclick="submitData()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-medium text-sm">Kirim ke Backend (LLM Map)</button>
+
+        <div id="mapping-result-box" class="mt-4 p-3 bg-slate-50 border rounded text-xs hidden">
+          <p class="font-bold text-slate-700 mb-1">Hasil Pemetaan LLM:</p>
+          <pre id="mapping-result" class="text-slate-600 overflow-x-auto"></pre>
+        </div>
+      </div>
+
+      <!-- Data Table -->
+      <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200 lg:col-span-2">
+        <h2 class="text-lg font-bold text-slate-900 mb-4">Daftar Produk Masuk (Tersimpan di DB)</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="bg-slate-100 border-b border-slate-200 text-slate-600">
+                <th class="p-2.5">ID</th>
+                <th class="p-2.5">Sumber</th>
+                <th class="p-2.5">EUP in VAT</th>
+                <th class="p-2.5">EUP ex VAT</th>
+                <th class="p-2.5">Unit Price</th>
+                <th class="p-2.5">COGS</th>
+                <th class="p-2.5">Margin</th>
+              </tr>
+            </thead>
+            <tbody id="table-body" class="divide-y divide-slate-100">
+              <tr>
+                <td colspan="7" class="p-4 text-center text-slate-400">Memuat data...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const templates = {
+      sheet1: {
+        source: "Sheet1_Panjang",
+        headers: "end user price include vat, end user price ex vat, payment rate, payment cost, unit price, cogs, margin",
+        row: "750000, 675000, 0.03, 22500, 675000, 450000, 225000"
+      },
+      sheet2: {
+        source: "Sheet2_Singkat",
+        headers: "EUP in VAT, EUP ex VAT, payment rate, payment cost, unit price, cogs, margin",
+        row: "1250000, 1126126, 0.03, 37500, 1126126, 800000, 326126"
+      }
+    };
+
+    function setTemplate(type) {
+      document.getElementById('input-source').value = templates[type].source;
+      document.getElementById('input-headers').value = templates[type].headers;
+      document.getElementById('input-row').value = templates[type].row;
+    }
+
+    function formatRupiah(num) {
+      if (num === null || num === undefined) return "Rp 0";
+      return "Rp " + Math.round(num).toLocaleString('id-ID');
+    }
+
+    async function refreshData() {
+      try {
+        const [analyticsRes, productsRes] = await Promise.all([
+          fetch('/api/analytics'),
+          fetch('/api/products')
+        ]);
+        
+        const analytics = await analyticsRes.json();
+        const products = await productsRes.json();
+
+        document.getElementById('stat-total').innerText = analytics.total_products;
+        document.getElementById('stat-max-eup').innerText = formatRupiah(analytics.highest_eup_inc_vat);
+        document.getElementById('stat-min-eup').innerText = formatRupiah(analytics.lowest_eup_inc_vat);
+        document.getElementById('stat-avg-margin').innerText = formatRupiah(analytics.average_margin);
+
+        if (analytics.top_product_by_eup) {
+          document.getElementById('stat-max-source').innerText = "Sumber: " + analytics.top_product_by_eup.source;
+        }
+
+        const tbody = document.getElementById('table-body');
+        if (products.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-slate-400">Belum ada data. Silakan kirim data dari form sebelah kiri.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = products.map(item => `
+          <tr class="hover:bg-slate-50">
+            <td class="p-2.5 font-mono text-slate-500">${item.id}</td>
+            <td class="p-2.5 font-medium text-slate-700">${item.source || '-'}</td>
+            <td class="p-2.5 font-semibold text-emerald-600">${formatRupiah(item.eup_inc_vat)}</td>
+            <td class="p-2.5">${formatRupiah(item.eup_ex_vat)}</td>
+            <td class="p-2.5">${formatRupiah(item.unit_price)}</td>
+            <td class="p-2.5">${formatRupiah(item.cogs)}</td>
+            <td class="p-2.5 text-blue-600 font-medium">${formatRupiah(item.margin)}</td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        console.error("Gagal refresh data:", err);
+      }
+    }
+
+    async function submitData() {
+      const source = document.getElementById('input-source').value.trim();
+      const headersStr = document.getElementById('input-headers').value.trim();
+      const rowStr = document.getElementById('input-row').value.trim();
+
+      if (!headersStr || !rowStr) {
+        alert("Headers dan data baris tidak boleh kosong!");
+        return;
+      }
+
+      const headers = headersStr.split(',').map(s => s.trim());
+      const row = rowStr.split(',').map(s => s.trim());
+
+      const payload = {
+        sheet_name: source,
+        headers: headers,
+        rows: [row]
+      };
+
+      try {
+        const res = await fetch('/api/ingest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+        
+        const box = document.getElementById('mapping-result-box');
+        const pre = document.getElementById('mapping-result');
+        pre.innerText = JSON.stringify(result.column_mapping, null, 2);
+        box.classList.remove('hidden');
+
+        await refreshData();
+      } catch (err) {
+        alert("Gagal kirim data: " + err);
+      }
+    }
+
+    // Default template Sheet 2
+    setTemplate('sheet2');
+    refreshData();
+  </script>
+</body>
+</html>
