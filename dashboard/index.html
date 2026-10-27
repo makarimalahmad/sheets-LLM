@@ -53,9 +53,11 @@
           <h3 class="text-md font-bold text-slate-900 mb-2">1. Nama Kolom Standar yang Dibuat AI</h3>
           <div id="canonical-tags" class="flex flex-wrap gap-2 mb-4"></div>
 
-          <h3 class="text-md font-bold text-slate-900 mb-2">2. Penyesuaian Kolom Tiap Sheet</h3>
-          <div class="overflow-x-auto">
-            <pre id="mapping-matrix" class="p-3 bg-slate-100 rounded text-xs text-slate-700 overflow-x-auto font-mono"></pre>
+          <div id="mapping-section">
+            <h3 class="text-md font-bold text-slate-900 mb-2">2. Penyesuaian Kolom Tiap Sheet</h3>
+            <div class="overflow-x-auto">
+              <pre id="mapping-matrix" class="p-3 bg-slate-100 rounded text-xs text-slate-700 overflow-x-auto font-mono"></pre>
+            </div>
           </div>
         </div>
 
@@ -332,18 +334,21 @@
         }
 
         // Update Tabel Konsolidasi dari Database jika ada data tersimpan
-        if (consolidated && consolidated.length > 0) {
-          const first = consolidated[0];
-          const fields = Object.keys(first).filter(k => !k.startsWith('_'));
+        const records = Array.isArray(consolidated) ? consolidated : (consolidated.records || []);
+        const mappings = consolidated.sheet_mappings || null;
+        const canonicals = (consolidated.canonical_fields && consolidated.canonical_fields.length > 0)
+          ? consolidated.canonical_fields
+          : (records.length > 0 ? Object.keys(records[0]).filter(k => !k.startsWith('_')) : []);
 
+        if (records.length > 0) {
           const thead = document.getElementById('consolidated-table-head');
-          thead.innerHTML = `<tr><th class="p-2.5">Sumber</th>${fields.map(c => `<th class="p-2.5">${c}</th>`).join('')}</tr>`;
+          thead.innerHTML = `<tr><th class="p-2.5">Sumber</th>${canonicals.map(c => `<th class="p-2.5">${c}</th>`).join('')}</tr>`;
 
           const cbody = document.getElementById('consolidated-table-body');
-          cbody.innerHTML = consolidated.map(r => `
+          cbody.innerHTML = records.map(r => `
             <tr class="hover:bg-slate-50">
               <td class="p-2.5 font-bold text-slate-800">${r._source_sheet || '-'}</td>
-              ${fields.map(f => {
+              ${canonicals.map(f => {
                 const val = r[f];
                 const display = (typeof val === 'number') ? val.toLocaleString('id-ID') : (val !== null ? val : '-');
                 return `<td class="p-2.5 font-mono text-slate-700">${display}</td>`;
@@ -353,9 +358,18 @@
 
           // Tampilkan tag kolom standar
           const tagsContainer = document.getElementById('canonical-tags');
-          tagsContainer.innerHTML = fields.map(f => `
+          tagsContainer.innerHTML = canonicals.map(f => `
             <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded font-mono text-xs font-semibold">${f}</span>
           `).join('');
+
+          // Tampilkan catatan penyesuaian kolom jika ada
+          const mappingBox = document.getElementById('mapping-section');
+          if (mappings && Object.keys(mappings).length > 0) {
+            document.getElementById('mapping-matrix').innerText = JSON.stringify(mappings, null, 2);
+            mappingBox.classList.remove('hidden');
+          } else {
+            mappingBox.classList.add('hidden');
+          }
 
           document.getElementById('multi-result-container').classList.remove('hidden');
         }

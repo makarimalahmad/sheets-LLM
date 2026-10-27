@@ -143,7 +143,7 @@ def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
 
             all_consolidated_records.append(record)
 
-    save_consolidated_records(batch_id, all_consolidated_records)
+    save_consolidated_records(batch_id, all_consolidated_records, canonical_fields, sheet_mappings)
 
     return ConsolidatedDataset(
         status="success",
