@@ -13,17 +13,10 @@ def get_groq_client() -> Optional[Groq]:
     return Groq(api_key=api_key)
 
 def harmonize_sheets_schema(sheets: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """
-    Zero-Shot Schema Harmonization via LLM (openai/gpt-oss-120b).
-    Tanpa kamus kata kunci manual (Zero Hardcoded Dictionary).
-    Menerima N sheet dengan nama kolom bebas/singkatan,
-    LLM mengenali arti semantik & menghasilkan 1 skema kanonikal baku.
-    """
     client = get_groq_client()
     if not client:
         raise ValueError("GROQ_API_KEY belum disetel di file .env")
 
-    # Siapkan data ringkas (header + maksimal 2 baris sampel data untuk konteks nilai)
     simplified_sheets = []
     for s in sheets:
         simplified_sheets.append({
@@ -77,9 +70,6 @@ Output strictly a JSON object with this exact structure:
     }
 
 def map_single_sheet_headers(headers: List[str], sample_rows: Optional[List[List[Any]]] = None) -> Dict[str, Optional[str]]:
-    """
-    Fungsi pembantu untuk memetakan kolom dari 1 sheet saja tanpa kamus manual.
-    """
     sheet_payload = [{
         "sheet_name": "InputSheet",
         "headers": headers,

@@ -21,7 +21,6 @@ def get_db(db_path: str = DEFAULT_DB_PATH):
 def init_db(db_path: str = DEFAULT_DB_PATH) -> None:
     with get_db(db_path) as conn:
         cursor = conn.cursor()
-        # Tabel produk tunggal (kompatibilitas)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS products (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,7 +35,6 @@ def init_db(db_path: str = DEFAULT_DB_PATH) -> None:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        # Tabel rekonsiliasi multi-sheet terpadu
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS consolidated_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

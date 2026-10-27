@@ -40,7 +40,6 @@ app.add_middleware(
 )
 
 def parse_cell_value(val: Any) -> Any:
-    """Konversi cerdas: jika angka/mata uang ubah ke float, jika teks pertahankan string."""
     if val is None:
         return None
     if isinstance(val, (int, float)):
@@ -48,7 +47,6 @@ def parse_cell_value(val: Any) -> Any:
     s = str(val).strip()
     if not s:
         return None
-    # Cek apakah format angka atau mata uang
     clean_s = re.sub(r"[^\d.,\-]", "", s)
     if clean_s and any(c.isdigit() for c in clean_s):
         if "," in clean_s and "." in clean_s:
@@ -84,9 +82,6 @@ def view_dashboard():
 
 @app.post("/api/harmonize-schema", response_model=HarmonizationResult)
 def preview_harmonization(payload: MultiSheetConsolidateRequest):
-    """
-    Menemukan nama kolom standar dari beberapa sheet secara otomatis tanpa kamus manual.
-    """
     if not payload.sheets:
         raise HTTPException(status_code=400, detail="Daftar sheet tidak boleh kosong")
 
@@ -102,9 +97,6 @@ def preview_harmonization(payload: MultiSheetConsolidateRequest):
 
 @app.post("/api/consolidate", response_model=ConsolidatedDataset)
 def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
-    """
-    Menggabungkan banyak sheet menjadi 1 tabel data yang rapi dan terstruktur.
-    """
     if not payload.sheets:
         raise HTTPException(status_code=400, detail="Daftar sheet tidak boleh kosong")
 
@@ -126,9 +118,7 @@ def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
         headers = sheet.headers
         rows = sheet.rows
 
-        # Dapatkan mapping untuk sheet ini
         s_mapping = sheet_mappings.get(s_name, {})
-        # Hubungkan index kolom asli ke nama field kanonikal
         index_to_canonical: Dict[int, str] = {}
         for idx, h in enumerate(headers):
             canonical = s_mapping.get(h)
@@ -139,18 +129,15 @@ def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
             record: Dict[str, Any] = {
                 "_source_sheet": s_name
             }
-            # Isi nilai untuk semua canonical field
             for c_field in canonical_fields:
                 record[c_field] = None
 
-            # Petakan nilai baris asli ke field kanonikal
             for idx, c_field in index_to_canonical.items():
                 if idx < len(row):
                     record[c_field] = parse_cell_value(row[idx])
 
             all_consolidated_records.append(record)
 
-    # Simpan ke database
     save_consolidated_records(batch_id, all_consolidated_records)
 
     return ConsolidatedDataset(
@@ -164,10 +151,8 @@ def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
 
 @app.get("/api/consolidated-records")
 def list_consolidated_records(limit: int = 100):
-    """Melihat data hasil konsolidasi multi-sheet yang tersimpan di database."""
     return get_latest_consolidated_records(limit=limit)
 
-# --- Endpoint Single Sheet Ingest ---
 @app.post("/api/ingest", response_model=IngestResponse)
 def ingest_sheet_data(payload: SheetIngestRequest):
     if not payload.headers or not payload.rows:
