@@ -32,23 +32,25 @@ def harmonize_sheets_schema(sheets: List[Dict[str, Any]]) -> Dict[str, Any]:
             "sample_rows": s.get("rows", [])[:2]
         })
 
-    prompt = f"""You are an automated schema harmonization AI engine.
-You are given headers and sample data from multiple spreadsheets created by different people or teams.
-Headers contain inconsistent naming, abbreviations (e.g., EUP = End User Price, COGS/HPP = Cost of Goods Sold, VAT/PPN = Value Added Tax), typos, or informal terms.
+    prompt = f"""You are an automated schema harmonization engine.
+You are given headers and sample row values from multiple different spreadsheets created by various users or systems.
+Columns representing the exact same conceptual information may have different wording, abbreviations, languages, or casing.
 
-Your goal:
-1. Discover the common canonical schema that represents all sheets. Use clean, descriptive snake_case English field names (e.g. end_user_price_incl_vat, end_user_price_excl_vat, cost_of_goods_sold, profit_margin, etc.).
-2. Map each raw header from each sheet to its corresponding canonical field name. If a column is unique, give it a clean canonical name.
+Your task:
+1. Deduce the semantic meaning of each column purely from its header string and its sample cell values.
+2. Unify columns across all sheets that represent the exact same concept under ONE single canonical field name (formatted in descriptive, clean snake_case).
+3. If a column represents a unique concept distinct from all others, assign it a clear canonical snake_case name.
+4. Provide a mapping from every raw header of each sheet to its corresponding canonical field name.
 
 Input Sheets Data:
 {json.dumps(simplified_sheets, indent=2)}
 
 Output strictly a JSON object with this exact structure:
 {{
-  "canonical_fields": ["canonical_field_1", "canonical_field_2"],
+  "canonical_fields": ["field_name_1", "field_name_2"],
   "sheet_mappings": {{
     "Sheet_Name": {{
-      "raw_header_name": "canonical_field_1"
+      "original_header_name": "field_name_1"
     }}
   }}
 }}"""
