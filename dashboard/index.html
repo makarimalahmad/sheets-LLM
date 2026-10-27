@@ -79,16 +79,16 @@
         </div>
         <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200 border-l-4 border-l-emerald-500">
           <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Harga EUP Termahal</p>
-          <h3 id="stat-max-eup" class="text-2xl font-bold text-emerald-600">Rp 0</h3>
+          <h3 id="stat-max-eup" class="text-2xl font-bold text-emerald-600">0</h3>
           <p id="stat-max-source" class="text-xs text-slate-400 mt-1">-</p>
         </div>
         <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
           <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Harga EUP Terendah</p>
-          <h3 id="stat-min-eup" class="text-2xl font-bold text-slate-900">Rp 0</h3>
+          <h3 id="stat-min-eup" class="text-2xl font-bold text-slate-900">0</h3>
         </div>
         <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
           <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Rata-rata Margin</p>
-          <h3 id="stat-avg-margin" class="text-2xl font-bold text-blue-600">Rp 0</h3>
+          <h3 id="stat-avg-margin" class="text-2xl font-bold text-blue-600">0</h3>
         </div>
       </div>
 
@@ -286,9 +286,9 @@
       document.getElementById('input-row').value = templates[type].row;
     }
 
-    function formatRupiah(num) {
-      if (num === null || num === undefined) return "Rp 0";
-      return "Rp " + Math.round(num).toLocaleString('id-ID');
+    function formatNumber(num) {
+      if (num === null || num === undefined) return "0";
+      return Math.round(num).toLocaleString('id-ID');
     }
 
     async function refreshData() {
@@ -301,9 +301,9 @@
         const products = await productsRes.json();
 
         document.getElementById('stat-total').innerText = analytics.total_products;
-        document.getElementById('stat-max-eup').innerText = formatRupiah(analytics.highest_eup_inc_vat);
-        document.getElementById('stat-min-eup').innerText = formatRupiah(analytics.lowest_eup_inc_vat);
-        document.getElementById('stat-avg-margin').innerText = formatRupiah(analytics.average_margin);
+        document.getElementById('stat-max-eup').innerText = formatNumber(analytics.highest_eup_inc_vat);
+        document.getElementById('stat-min-eup').innerText = formatNumber(analytics.lowest_eup_inc_vat);
+        document.getElementById('stat-avg-margin').innerText = formatNumber(analytics.average_margin);
 
         if (analytics.top_product_by_eup) {
           document.getElementById('stat-max-source').innerText = "Sumber: " + analytics.top_product_by_eup.source;
@@ -319,11 +319,11 @@
           <tr class="hover:bg-slate-50">
             <td class="p-2.5 font-mono text-slate-500">${item.id}</td>
             <td class="p-2.5 font-medium text-slate-700">${item.source || '-'}</td>
-            <td class="p-2.5 font-semibold text-emerald-600">${formatRupiah(item.eup_inc_vat)}</td>
-            <td class="p-2.5">${formatRupiah(item.eup_ex_vat)}</td>
-            <td class="p-2.5">${formatRupiah(item.unit_price)}</td>
-            <td class="p-2.5">${formatRupiah(item.cogs)}</td>
-            <td class="p-2.5 text-blue-600 font-medium">${formatRupiah(item.margin)}</td>
+            <td class="p-2.5 font-semibold text-emerald-600">${formatNumber(item.eup_inc_vat)}</td>
+            <td class="p-2.5">${formatNumber(item.eup_ex_vat)}</td>
+            <td class="p-2.5">${formatNumber(item.unit_price)}</td>
+            <td class="p-2.5">${formatNumber(item.cogs)}</td>
+            <td class="p-2.5 text-blue-600 font-medium">${formatNumber(item.margin)}</td>
           </tr>
         `).join('');
       } catch (err) {
