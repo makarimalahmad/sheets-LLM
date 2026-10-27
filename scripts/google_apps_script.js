@@ -1,22 +1,46 @@
-// Kode ini ditempel di Google Sheets -> Menu Ekstensi -> Apps Script
+// Buka Google Sheets -> Menu Ekstensi -> Apps Script -> Tempel kode ini
 
-function sendSheetDataToBackend() {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var data = sheet.getDataRange().getValues();
-  
-  if (data.length < 2) {
-    Logger.log("Data kurang dari 2 baris (header + isi).");
+// Menu tombol otomatis di Google Sheets
+function onOpen() {
+  var ui = SpreadsheetApp.getUi();
+  ui.createMenu("Sync AI")
+    .addItem("Gabungkan Semua Sheet ke Backend", "sendAllSheetsToBackend")
+    .addToUi();
+}
+
+// Fungsi membaca semua sheet (tab 1 sampai 5 dst) dan kirim ke backend
+function sendAllSheetsToBackend() {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var sheets = spreadsheet.getSheets();
+  var sheetsPayload = [];
+
+  for (var i = 0; i < sheets.length; i++) {
+    var sheet = sheets[i];
+    var data = sheet.getDataRange().getValues();
+
+    if (data.length >= 2) {
+      var headers = data[0].map(function(h) { return String(h).trim(); });
+      var rows = data.slice(1);
+
+      sheetsPayload.push({
+        sheet_name: sheet.getName(),
+        headers: headers,
+        rows: rows
+      });
+    }
+  }
+
+  if (sheetsPayload.length === 0) {
+    Logger.log("Tidak ada sheet yang memiliki data.");
     return;
   }
 
-  var headers = data[0];
-  var rows = data.slice(1);
-
   var payload = {
-    sheet_name: sheet.getName(),
-    headers: headers,
-    rows: rows
+    sheets: sheetsPayload
   };
+
+  // Masukkan URL backend VPS Anda
+  var backendUrl = "http://172.232.224.220/api/consolidate";
 
   var options = {
     method: "post",
@@ -25,13 +49,12 @@ function sendSheetDataToBackend() {
     muteHttpExceptions: true
   };
 
-  // Masukkan URL backend FastAPI Anda di sini (misal URL ngrok / server cloud)
-  var backendUrl = "http://localhost:8000/api/ingest"; 
-
   try {
     var response = UrlFetchApp.fetch(backendUrl, options);
-    Logger.log("Response: " + response.getContentText());
+    Logger.log("Berhasil: " + response.getContentText());
+    SpreadsheetApp.getUi().alert("Sukses! Data dari " + sheetsPayload.length + " sheet berhasil digabungkan oleh AI.");
   } catch (error) {
-    Logger.log("Error sending data: " + error.toString());
+    Logger.log("Error: " + error.toString());
+    SpreadsheetApp.getUi().alert("Gagal kirim: " + error.toString());
   }
 }
