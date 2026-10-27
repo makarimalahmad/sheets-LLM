@@ -15,6 +15,7 @@
       </div>
       <div class="flex gap-2">
         <a href="/docs" target="_blank" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded text-sm font-medium">Dokumentasi API</a>
+        <button onclick="clearDataHistory()" class="px-4 py-2 bg-slate-100 hover:bg-rose-100 hover:text-rose-700 border border-slate-300 rounded text-sm font-medium">Bersihkan Riwayat</button>
         <button onclick="refreshData()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium">Perbarui Data</button>
       </div>
     </header>
@@ -360,6 +361,21 @@
         }
       } catch (err) {
         console.error("Gagal refresh data:", err);
+      }
+    }
+
+    async function clearDataHistory() {
+      if (!confirm("Bersihkan semua riwayat data lama di database?")) return;
+      try {
+        await fetch('/api/clear-data', { method: 'DELETE' });
+        document.getElementById('consolidated-table-body').innerHTML = '';
+        document.getElementById('consolidated-table-head').innerHTML = '';
+        document.getElementById('canonical-tags').innerHTML = '';
+        document.getElementById('multi-result-container').classList.add('hidden');
+        await refreshData();
+        alert("Riwayat data lama berhasil dibersihkan.");
+      } catch (err) {
+        alert("Gagal membersihkan data: " + err);
       }
     }
 

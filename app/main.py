@@ -22,7 +22,8 @@ from app.database import (
     get_highest_eup,
     get_analytics,
     save_consolidated_records,
-    get_latest_consolidated_records
+    get_latest_consolidated_records,
+    clear_all_records
 )
 
 app = FastAPI(
@@ -157,6 +158,12 @@ def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
 @app.get("/api/consolidated-records")
 def list_consolidated_records(limit: int = 100):
     return get_latest_consolidated_records(limit=limit)
+
+# Hapus semua riwayat data di database
+@app.delete("/api/clear-data")
+def clear_data():
+    clear_all_records()
+    return {"status": "success", "message": "Riwayat data berhasil dibersihkan"}
 
 # Terima dan simpan data sheet tunggal
 @app.post("/api/ingest", response_model=IngestResponse)

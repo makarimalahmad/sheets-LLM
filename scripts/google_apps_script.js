@@ -4,7 +4,7 @@
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
   ui.createMenu("Sync AI")
-    .addItem("Gabungkan Semua Sheet ke Backend", "sendAllSheetsToBackend")
+    .addItem("Gabungkan Semua Sheet", "sendAllSheetsToBackend")
     .addToUi();
 }
 
@@ -19,13 +19,15 @@ function sendAllSheetsToBackend() {
     var data = sheet.getDataRange().getValues();
 
     if (data.length >= 2) {
-      var headers = data[0].map(function(h) { return String(h).trim(); });
+      var headers = data[0].map(function (h) {
+        return String(h).trim();
+      });
       var rows = data.slice(1);
 
       sheetsPayload.push({
         sheet_name: sheet.getName(),
         headers: headers,
-        rows: rows
+        rows: rows,
       });
     }
   }
@@ -36,7 +38,7 @@ function sendAllSheetsToBackend() {
   }
 
   var payload = {
-    sheets: sheetsPayload
+    sheets: sheetsPayload,
   };
 
   // Masukkan URL backend VPS Anda
@@ -46,13 +48,17 @@ function sendAllSheetsToBackend() {
     method: "post",
     contentType: "application/json",
     payload: JSON.stringify(payload),
-    muteHttpExceptions: true
+    muteHttpExceptions: true,
   };
 
   try {
     var response = UrlFetchApp.fetch(backendUrl, options);
     Logger.log("Berhasil: " + response.getContentText());
-    SpreadsheetApp.getUi().alert("Sukses! Data dari " + sheetsPayload.length + " sheet berhasil digabungkan oleh AI.");
+    SpreadsheetApp.getUi().alert(
+      "Sukses! Data dari " +
+        sheetsPayload.length +
+        " sheet berhasil digabungkan oleh AI.",
+    );
   } catch (error) {
     Logger.log("Error: " + error.toString());
     SpreadsheetApp.getUi().alert("Gagal kirim: " + error.toString());

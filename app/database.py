@@ -96,17 +96,23 @@ def save_consolidated_records(batch_id: str, records: List[Dict[str, Any]], db_p
         conn.commit()
     return inserted
 
-# Ambil data gabungan terbaru
+# Ambil data gabungan dari batch penggabungan paling terakhir
 def get_latest_consolidated_records(limit: int = 100, db_path: str = DEFAULT_DB_PATH) -> List[Dict[str, Any]]:
     init_db(db_path)
     with get_db(db_path) as conn:
         cursor = conn.cursor()
+        cursor.execute("SELECT batch_id FROM consolidated_records ORDER BY id DESC LIMIT 1")
+        latest_row = cursor.fetchone()
+        if not latest_row:
+            return []
+        latest_batch = latest_row["batch_id"]
         cursor.execute("""
             SELECT id, batch_id, source_sheet, data_json, created_at
             FROM consolidated_records
-            ORDER BY id DESC
+            WHERE batch_id = ?
+            ORDER BY id ASC
             LIMIT ?
-        """, (limit,))
+        """, (latest_batch, limit))
         rows = cursor.fetchall()
         result = []
         for r in rows:
@@ -116,6 +122,15 @@ def get_latest_consolidated_records(limit: int = 100, db_path: str = DEFAULT_DB_
             item["_created_at"] = r["created_at"]
             result.append(item)
         return result
+
+# Kosongkan semua data riwayat di database
+def clear_all_records(db_path: str = DEFAULT_DB_PATH) -> None:
+    init_db(db_path)
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM consolidated_records")
+        cursor.execute("DELETE FROM products")
+        conn.commit()
 
 # Ambil semua data produk
 def get_all_products(limit: int = 100, db_path: str = DEFAULT_DB_PATH) -> List[Dict[str, Any]]:
