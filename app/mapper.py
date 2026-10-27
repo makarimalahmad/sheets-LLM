@@ -34,12 +34,12 @@ def harmonize_sheets_schema(sheets: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     prompt = f"""You are an automated schema harmonization engine.
 You are given headers and sample row values from multiple different spreadsheets created by various users or systems.
-Columns representing the exact same conceptual information may have different wording, abbreviations, languages, or casing.
+Columns representing the exact same conceptual information across different sheets may have different wording, abbreviations, languages, or casing.
 
 Your task:
 1. Deduce the semantic meaning of each column purely from its header string and its sample cell values.
-2. Unify columns across all sheets that represent the exact same concept under ONE single canonical field name (formatted in descriptive, clean snake_case).
-3. If a column represents a unique concept distinct from all others, assign it a clear canonical snake_case name.
+2. Unify columns across different sheets that represent the exact same concept under ONE single canonical field name (formatted in descriptive, clean snake_case).
+3. STRICT CONSTRAINT - 1-to-1 Mapping Per Sheet: Two distinct columns within the SAME sheet must NEVER map to the same canonical field. If a sheet has two separate columns (such as end-user price excluding tax vs unit price, or payment rate vs payment cost), treat them as separate distinct attributes and give each its own unique canonical field name.
 4. Provide a mapping from every raw header of each sheet to its corresponding canonical field name.
 
 Input Sheets Data:
