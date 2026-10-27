@@ -293,13 +293,16 @@
 
     async function refreshData() {
       try {
-        const [analyticsRes, productsRes] = await Promise.all([
+        const [analyticsRes, productsRes, consolidatedRes] = await Promise.all([
           fetch('/api/analytics'),
-          fetch('/api/products')
+          fetch('/api/products'),
+          fetch('/api/consolidated-records')
         ]);
         const analytics = await analyticsRes.json();
         const products = await productsRes.json();
+        const consolidated = await consolidatedRes.json();
 
+        // Update KPI
         document.getElementById('stat-total').innerText = analytics.total_products;
         document.getElementById('stat-max-eup').innerText = formatNumber(analytics.highest_eup_inc_vat);
         document.getElementById('stat-min-eup').innerText = formatNumber(analytics.lowest_eup_inc_vat);
@@ -309,23 +312,52 @@
           document.getElementById('stat-max-source').innerText = "Sumber: " + analytics.top_product_by_eup.source;
         }
 
+        // Update Tabel Single Ingest
         const tbody = document.getElementById('table-body');
         if (products.length === 0) {
           tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-slate-400">Belum ada data. Silakan kirim data dari form.</td></tr>';
-          return;
+        } else {
+          tbody.innerHTML = products.map(item => `
+            <tr class="hover:bg-slate-50">
+              <td class="p-2.5 font-mono text-slate-500">${item.id}</td>
+              <td class="p-2.5 font-medium text-slate-700">${item.source || '-'}</td>
+              <td class="p-2.5 font-semibold text-emerald-600">${formatNumber(item.eup_inc_vat)}</td>
+              <td class="p-2.5">${formatNumber(item.eup_ex_vat)}</td>
+              <td class="p-2.5">${formatNumber(item.unit_price)}</td>
+              <td class="p-2.5">${formatNumber(item.cogs)}</td>
+              <td class="p-2.5 text-blue-600 font-medium">${formatNumber(item.margin)}</td>
+            </tr>
+          `).join('');
         }
 
-        tbody.innerHTML = products.map(item => `
-          <tr class="hover:bg-slate-50">
-            <td class="p-2.5 font-mono text-slate-500">${item.id}</td>
-            <td class="p-2.5 font-medium text-slate-700">${item.source || '-'}</td>
-            <td class="p-2.5 font-semibold text-emerald-600">${formatNumber(item.eup_inc_vat)}</td>
-            <td class="p-2.5">${formatNumber(item.eup_ex_vat)}</td>
-            <td class="p-2.5">${formatNumber(item.unit_price)}</td>
-            <td class="p-2.5">${formatNumber(item.cogs)}</td>
-            <td class="p-2.5 text-blue-600 font-medium">${formatNumber(item.margin)}</td>
-          </tr>
-        `).join('');
+        // Update Tabel Konsolidasi dari Database jika ada data tersimpan
+        if (consolidated && consolidated.length > 0) {
+          const first = consolidated[0];
+          const fields = Object.keys(first).filter(k => !k.startsWith('_'));
+
+          const thead = document.getElementById('consolidated-table-head');
+          thead.innerHTML = `<tr><th class="p-2.5">Sumber</th>${fields.map(c => `<th class="p-2.5">${c}</th>`).join('')}</tr>`;
+
+          const cbody = document.getElementById('consolidated-table-body');
+          cbody.innerHTML = consolidated.map(r => `
+            <tr class="hover:bg-slate-50">
+              <td class="p-2.5 font-bold text-slate-800">${r._source_sheet || '-'}</td>
+              ${fields.map(f => {
+                const val = r[f];
+                const display = (typeof val === 'number') ? val.toLocaleString('id-ID') : (val !== null ? val : '-');
+                return `<td class="p-2.5 font-mono text-slate-700">${display}</td>`;
+              }).join('')}
+            </tr>
+          `).join('');
+
+          // Tampilkan tag kolom standar
+          const tagsContainer = document.getElementById('canonical-tags');
+          tagsContainer.innerHTML = fields.map(f => `
+            <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded font-mono text-xs font-semibold">${f}</span>
+          `).join('');
+
+          document.getElementById('multi-result-container').classList.remove('hidden');
+        }
       } catch (err) {
         console.error("Gagal refresh data:", err);
       }
