@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard Produk & Analitik Sheets LLM</title>
+  <title>Dashboard Sheets AI Harmonizer & Consolidator</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen">
   <div class="max-w-7xl mx-auto px-4 py-8">
-    <header class="flex justify-between items-center mb-8 border-b pb-4">
+    <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b pb-4 gap-4">
       <div>
-        <h1 class="text-2xl font-bold text-slate-900">Dashboard Sheets AI Ingestion</h1>
-        <p class="text-sm text-slate-500">Pemetaan Semantik Kolom Otomatis via LLM (openai/gpt-oss-120b)</p>
+        <h1 class="text-2xl font-bold text-slate-900">Sheets AI Schema Harmonizer & Consolidation</h1>
+        <p class="text-sm text-slate-500">Harmonisasi Multi-Sheet Bebas Tanpa Kamus Manual (Zero Hardcoded Dictionary) via LLM</p>
       </div>
       <div class="flex gap-2">
         <a href="/docs" target="_blank" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded text-sm font-medium">Swagger API Docs</a>
@@ -19,91 +19,242 @@
       </div>
     </header>
 
-    <!-- KPI Summary Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-      <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
-        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Total Produk</p>
-        <h3 id="stat-total" class="text-2xl font-bold text-slate-900">0</h3>
+    <!-- Navigasi Tab Mode -->
+    <div class="flex border-b border-slate-200 mb-6 gap-4">
+      <button id="tab-btn-multi" onclick="switchTab('multi')" class="py-2 px-4 border-b-2 font-semibold text-sm border-blue-600 text-blue-600">Konsolidasi Multi-Sheet (Utama Mentor)</button>
+      <button id="tab-btn-single" onclick="switchTab('single')" class="py-2 px-4 border-b-2 font-semibold text-sm border-transparent text-slate-500 hover:text-slate-700">Simulasi Single Ingest & KPI</button>
+    </div>
+
+    <!-- TAB 1: KONSOLIDASI MULTI-SHEET -->
+    <div id="tab-multi" class="space-y-6">
+      <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+        <div class="flex justify-between items-center mb-4">
+          <div>
+            <h2 class="text-lg font-bold text-slate-900">Uji Coba Multi-Sheet (Format Liar / Beda Orang)</h2>
+            <p class="text-xs text-slate-500">Kirim 3 sheet sekaligus dengan istilah berbeda (EUP in VAT, end user price, harga user + ppn, HPP, cogs). AI otomatis menyatukan ke 1 skema.</p>
+          </div>
+          <button onclick="loadMultiSheetSample()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded text-xs font-semibold text-slate-700">Isi Contoh 3 Sheet</button>
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-xs font-medium text-slate-600 mb-1">Payload JSON Multi-Sheet:</label>
+          <textarea id="multi-sheet-json" rows="10" class="w-full text-xs p-3 border rounded border-slate-300 font-mono bg-slate-900 text-emerald-400"></textarea>
+        </div>
+
+        <button id="btn-run-harmonize" onclick="runConsolidation()" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium text-sm flex justify-center items-center gap-2">
+          <span>Jalankan Konsolidasi Multi-Sheet via LLM</span>
+        </button>
       </div>
-      <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200 border-l-4 border-l-emerald-500">
-        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Harga EUP Termahal</p>
-        <h3 id="stat-max-eup" class="text-2xl font-bold text-emerald-600">Rp 0</h3>
-        <p id="stat-max-source" class="text-xs text-slate-400 mt-1">-</p>
-      </div>
-      <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
-        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Harga EUP Terendah</p>
-        <h3 id="stat-min-eup" class="text-2xl font-bold text-slate-900">Rp 0</h3>
-      </div>
-      <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
-        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Rata-rata Margin</p>
-        <h3 id="stat-avg-margin" class="text-2xl font-bold text-blue-600">Rp 0</h3>
+
+      <!-- Hasil Harmonisasi Skema -->
+      <div id="multi-result-container" class="hidden space-y-6">
+        <!-- Canonical Schema Card -->
+        <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+          <h3 class="text-md font-bold text-slate-900 mb-2">1. Skema Kanonikal yang Ditemukan AI (Zero Manual Dictionary)</h3>
+          <div id="canonical-tags" class="flex flex-wrap gap-2 mb-4"></div>
+
+          <h3 class="text-md font-bold text-slate-900 mb-2">2. Matriks Pemetaan Kolom Tiap Sheet</h3>
+          <div class="overflow-x-auto">
+            <pre id="mapping-matrix" class="p-3 bg-slate-100 rounded text-xs text-slate-700 overflow-x-auto font-mono"></pre>
+          </div>
+        </div>
+
+        <!-- Tabel Konsolidasi Terpadu -->
+        <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+          <h3 class="text-md font-bold text-slate-900 mb-3">3. Tabel Data Terstruktur Hasil Konsolidasi (Semua Sheet Menjadi 1)</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead id="consolidated-table-head" class="bg-slate-100 border-b border-slate-200 text-slate-700 font-semibold"></thead>
+              <tbody id="consolidated-table-body" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Main Grid: Upload Simulator & Table -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      <!-- Upload Simulator -->
-      <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200 lg:col-span-1">
-        <h2 class="text-lg font-bold text-slate-900 mb-4">Simulasi Kirim Data Sheets</h2>
-        <div class="mb-4">
-          <label class="block text-xs font-medium text-slate-600 mb-1">Pilih Template Header Sheets:</label>
+    <!-- TAB 2: SINGLE INGEST & KPI EUP -->
+    <div id="tab-single" class="hidden space-y-6">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
+          <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Total Produk</p>
+          <h3 id="stat-total" class="text-2xl font-bold text-slate-900">0</h3>
+        </div>
+        <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200 border-l-4 border-l-emerald-500">
+          <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Harga EUP Termahal</p>
+          <h3 id="stat-max-eup" class="text-2xl font-bold text-emerald-600">Rp 0</h3>
+          <p id="stat-max-source" class="text-xs text-slate-400 mt-1">-</p>
+        </div>
+        <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
+          <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Harga EUP Terendah</p>
+          <h3 id="stat-min-eup" class="text-2xl font-bold text-slate-900">Rp 0</h3>
+        </div>
+        <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
+          <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Rata-rata Margin</p>
+          <h3 id="stat-avg-margin" class="text-2xl font-bold text-blue-600">Rp 0</h3>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200 lg:col-span-1">
+          <h2 class="text-lg font-bold text-slate-900 mb-4">Simulasi Kirim Data 1 Sheet</h2>
           <div class="flex gap-2 mb-3">
             <button onclick="setTemplate('sheet1')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded text-xs font-medium">Sheet 1 (Panjang)</button>
             <button onclick="setTemplate('sheet2')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded text-xs font-medium">Sheet 2 (Singkat)</button>
           </div>
+          <div class="mb-3">
+            <label class="block text-xs font-medium text-slate-600 mb-1">Nama Sheet / Sumber:</label>
+            <input id="input-source" type="text" value="Demo_Sheet" class="w-full text-xs p-2 border rounded border-slate-300 font-mono">
+          </div>
+          <div class="mb-3">
+            <label class="block text-xs font-medium text-slate-600 mb-1">Nama Kolom Header (pisahkan koma):</label>
+            <textarea id="input-headers" rows="3" class="w-full text-xs p-2 border rounded border-slate-300 font-mono"></textarea>
+          </div>
+          <div class="mb-4">
+            <label class="block text-xs font-medium text-slate-600 mb-1">Baris Data (pisahkan koma):</label>
+            <textarea id="input-row" rows="2" class="w-full text-xs p-2 border rounded border-slate-300 font-mono"></textarea>
+          </div>
+          <button onclick="submitData()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-medium text-sm">Kirim ke Backend (LLM Map)</button>
         </div>
 
-        <div class="mb-3">
-          <label class="block text-xs font-medium text-slate-600 mb-1">Nama Sheet / Sumber:</label>
-          <input id="input-source" type="text" value="Demo_Sheet" class="w-full text-xs p-2 border rounded border-slate-300 font-mono">
-        </div>
-
-        <div class="mb-3">
-          <label class="block text-xs font-medium text-slate-600 mb-1">Nama Kolom Header (pisahkan koma):</label>
-          <textarea id="input-headers" rows="3" class="w-full text-xs p-2 border rounded border-slate-300 font-mono"></textarea>
-        </div>
-
-        <div class="mb-4">
-          <label class="block text-xs font-medium text-slate-600 mb-1">Baris Data (pisahkan koma):</label>
-          <textarea id="input-row" rows="2" class="w-full text-xs p-2 border rounded border-slate-300 font-mono"></textarea>
-        </div>
-
-        <button onclick="submitData()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-medium text-sm">Kirim ke Backend (LLM Map)</button>
-
-        <div id="mapping-result-box" class="mt-4 p-3 bg-slate-50 border rounded text-xs hidden">
-          <p class="font-bold text-slate-700 mb-1">Hasil Pemetaan LLM:</p>
-          <pre id="mapping-result" class="text-slate-600 overflow-x-auto"></pre>
-        </div>
-      </div>
-
-      <!-- Data Table -->
-      <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200 lg:col-span-2">
-        <h2 class="text-lg font-bold text-slate-900 mb-4">Daftar Produk Masuk (Tersimpan di DB)</h2>
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr class="bg-slate-100 border-b border-slate-200 text-slate-600">
-                <th class="p-2.5">ID</th>
-                <th class="p-2.5">Sumber</th>
-                <th class="p-2.5">EUP in VAT</th>
-                <th class="p-2.5">EUP ex VAT</th>
-                <th class="p-2.5">Unit Price</th>
-                <th class="p-2.5">COGS</th>
-                <th class="p-2.5">Margin</th>
-              </tr>
-            </thead>
-            <tbody id="table-body" class="divide-y divide-slate-100">
-              <tr>
-                <td colspan="7" class="p-4 text-center text-slate-400">Memuat data...</td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200 lg:col-span-2">
+          <h2 class="text-lg font-bold text-slate-900 mb-4">Daftar Produk Single Masuk</h2>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="bg-slate-100 border-b border-slate-200 text-slate-600">
+                  <th class="p-2.5">ID</th>
+                  <th class="p-2.5">Sumber</th>
+                  <th class="p-2.5">EUP in VAT</th>
+                  <th class="p-2.5">EUP ex VAT</th>
+                  <th class="p-2.5">Unit Price</th>
+                  <th class="p-2.5">COGS</th>
+                  <th class="p-2.5">Margin</th>
+                </tr>
+              </thead>
+              <tbody id="table-body" class="divide-y divide-slate-100">
+                <tr><td colspan="7" class="p-4 text-center text-slate-400">Memuat data...</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
   <script>
+    function switchTab(tab) {
+      if (tab === 'multi') {
+        document.getElementById('tab-multi').classList.remove('hidden');
+        document.getElementById('tab-single').classList.add('hidden');
+        document.getElementById('tab-btn-multi').className = "py-2 px-4 border-b-2 font-semibold text-sm border-blue-600 text-blue-600";
+        document.getElementById('tab-btn-single').className = "py-2 px-4 border-b-2 font-semibold text-sm border-transparent text-slate-500 hover:text-slate-700";
+      } else {
+        document.getElementById('tab-multi').classList.add('hidden');
+        document.getElementById('tab-single').classList.remove('hidden');
+        document.getElementById('tab-btn-single').className = "py-2 px-4 border-b-2 font-semibold text-sm border-blue-600 text-blue-600";
+        document.getElementById('tab-btn-multi').className = "py-2 px-4 border-b-2 font-semibold text-sm border-transparent text-slate-500 hover:text-slate-700";
+      }
+    }
+
+    const sampleMultiSheets = {
+      sheets: [
+        {
+          sheet_name: "Cabang_Jakarta_Orang_A",
+          headers: ["EUP in VAT", "EUP ex VAT", "payment rate", "payment cost", "unit price", "cogs", "margin"],
+          rows: [
+            ["250000", "225000", "0.03", "7500", "225000", "150000", "75000"]
+          ]
+        },
+        {
+          sheet_name: "Cabang_Bandung_Orang_B",
+          headers: ["end user price include vat", "end user price ex vat", "pay rate", "pay cost", "harga unit", "cost of goods", "profit margin"],
+          rows: [
+            ["500000", "450000", "0.03", "15000", "450000", "300000", "150000"]
+          ]
+        },
+        {
+          sheet_name: "Cabang_Surabaya_Orang_C",
+          headers: ["harga user + ppn", "harga user tanpa ppn", "rate payment %", "biaya payment", "unit price", "hpp", "untung"],
+          rows: [
+            ["1200000", "1081081", "3%", "36000", "1081081", "700000", "381081"]
+          ]
+        }
+      ]
+    };
+
+    function loadMultiSheetSample() {
+      document.getElementById('multi-sheet-json').value = JSON.stringify(sampleMultiSheets, null, 2);
+    }
+
+    async function runConsolidation() {
+      const btn = document.getElementById('btn-run-harmonize');
+      const textVal = document.getElementById('multi-sheet-json').value.trim();
+      if (!textVal) {
+        alert("Payload JSON kosong!");
+        return;
+      }
+
+      let payload;
+      try {
+        payload = JSON.parse(textVal);
+      } catch (e) {
+        alert("Format JSON tidak valid: " + e.message);
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerText = "Memproses Harmonisasi LLM (openai/gpt-oss-120b)...";
+
+      try {
+        const res = await fetch('/api/consolidate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || "Gagal memproses konsolidasi");
+        }
+
+        const data = await res.json();
+
+        // Render Canonical Tags
+        const tagsContainer = document.getElementById('canonical-tags');
+        tagsContainer.innerHTML = data.canonical_fields.map(f => `
+          <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded font-mono text-xs font-semibold">${f}</span>
+        `).join('');
+
+        // Render Mapping Matrix
+        document.getElementById('mapping-matrix').innerText = JSON.stringify(data.sheet_mappings, null, 2);
+
+        // Render Consolidated Table
+        const thead = document.getElementById('consolidated-table-head');
+        const cols = ["_source_sheet", ...data.canonical_fields];
+        thead.innerHTML = `<tr>${cols.map(c => `<th class="p-2.5">${c}</th>`).join('')}</tr>`;
+
+        const tbody = document.getElementById('consolidated-table-body');
+        tbody.innerHTML = data.records.map(r => `
+          <tr class="hover:bg-slate-50">
+            <td class="p-2.5 font-bold text-slate-800">${r._source_sheet}</td>
+            ${data.canonical_fields.map(f => {
+              const val = r[f];
+              const display = (typeof val === 'number') ? val.toLocaleString('id-ID') : (val !== null ? val : '-');
+              return `<td class="p-2.5 font-mono text-slate-700">${display}</td>`;
+            }).join('')}
+          </tr>
+        `).join('');
+
+        document.getElementById('multi-result-container').classList.remove('hidden');
+      } catch (err) {
+        alert("Error: " + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "Jalankan Konsolidasi Multi-Sheet via LLM";
+      }
+    }
+
+    // Single Ingest Script
     const templates = {
       sheet1: {
         source: "Sheet1_Panjang",
@@ -134,7 +285,6 @@
           fetch('/api/analytics'),
           fetch('/api/products')
         ]);
-        
         const analytics = await analyticsRes.json();
         const products = await productsRes.json();
 
@@ -149,7 +299,7 @@
 
         const tbody = document.getElementById('table-body');
         if (products.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-slate-400">Belum ada data. Silakan kirim data dari form sebelah kiri.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-slate-400">Belum ada data. Silakan kirim data dari form.</td></tr>';
           return;
         }
 
@@ -175,7 +325,7 @@
       const rowStr = document.getElementById('input-row').value.trim();
 
       if (!headersStr || !rowStr) {
-        alert("Headers dan data baris tidak boleh kosong!");
+        alert("Headers dan baris data tidak boleh kosong!");
         return;
       }
 
@@ -194,20 +344,15 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        const result = await res.json();
-        
-        const box = document.getElementById('mapping-result-box');
-        const pre = document.getElementById('mapping-result');
-        pre.innerText = JSON.stringify(result.column_mapping, null, 2);
-        box.classList.remove('hidden');
-
+        await res.json();
         await refreshData();
       } catch (err) {
         alert("Gagal kirim data: " + err);
       }
     }
 
-    // Default template Sheet 2
+    // Inisialisasi awal
+    loadMultiSheetSample();
     setTemplate('sheet2');
     refreshData();
   </script>

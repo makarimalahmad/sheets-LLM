@@ -1,190 +1,88 @@
 import os
-import re
 import json
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from dotenv import load_dotenv
-from rapidfuzz import fuzz
 from groq import Groq
 
 load_dotenv()
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
-
-FIELD_KNOWLEDGE_BASE: Dict[str, List[str]] = {
-    "eup_inc_vat": [
-        "end user price include vat",
-        "end user price incl vat",
-        "end user price including vat",
-        "end user price in vat",
-        "eup in vat",
-        "eup inc vat",
-        "eup include vat",
-        "eup vat",
-        "harga eup include vat",
-    ],
-    "eup_ex_vat": [
-        "end user price ex vat",
-        "end user price excl vat",
-        "end user price exclude vat",
-        "end user price excluding vat",
-        "eup ex vat",
-        "eup excl vat",
-        "eup exclude vat",
-        "eup without vat",
-        "harga eup ex vat",
-    ],
-    "payment_rate": [
-        "payment rate",
-        "pay rate",
-        "payment %",
-        "rate payment",
-        "payment fee rate",
-    ],
-    "payment_cost": [
-        "payment cost",
-        "pay cost",
-        "payment fee",
-        "biaya payment",
-        "cost of payment",
-    ],
-    "unit_price": [
-        "unit price",
-        "price per unit",
-        "price unit",
-        "harga satuan",
-        "unit price idr",
-    ],
-    "cogs": [
-        "cogs",
-        "cost of goods sold",
-        "cost of goods",
-        "hpp",
-        "harga pokok penjualan",
-    ],
-    "margin": [
-        "margin",
-        "profit margin",
-        "gross margin",
-        "margin %",
-        "margin rate",
-    ],
-}
-
-ACRONYM_MAP = {
-    "eup": "end user price",
-    "inc": "include",
-    "in": "include",
-    "ex": "exclude",
-    "excl": "exclude",
-    "hpp": "cost of goods sold",
-}
-
-def clean_text(text: str) -> str:
-    cleaned = text.lower().strip()
-    cleaned = re.sub(r"[^\w\s%]", " ", cleaned)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    return cleaned
-
-def expand_acronyms(text: str) -> str:
-    words = clean_text(text).split()
-    expanded_words = [ACRONYM_MAP.get(word, word) for word in words]
-    return " ".join(expanded_words)
-
-def match_single_header_fuzzy(raw_header: str, threshold: float = 60.0) -> Optional[str]:
-    cleaned = clean_text(raw_header)
-    expanded = expand_acronyms(raw_header)
-
-    best_field = None
-    best_score = 0.0
-
-    for standard_field, aliases in FIELD_KNOWLEDGE_BASE.items():
-        for alias in aliases:
-            cleaned_alias = clean_text(alias)
-            score_direct = fuzz.token_sort_ratio(cleaned, cleaned_alias)
-            score_expanded = fuzz.token_sort_ratio(expanded, cleaned_alias)
-            current_max = max(score_direct, score_expanded)
-
-            if current_max > best_score:
-                best_score = current_max
-                best_field = standard_field
-
-    if best_score >= threshold:
-        return best_field
-    return None
-
-def map_headers_with_llm(raw_headers: List[str]) -> Optional[Dict[str, Optional[str]]]:
+def get_groq_client() -> Optional[Groq]:
     api_key = os.getenv("GROQ_API_KEY", "").strip()
     if not api_key:
         return None
+    return Groq(api_key=api_key)
 
-    client = Groq(api_key=api_key)
+def harmonize_sheets_schema(sheets: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Zero-Shot Schema Harmonization via LLM (openai/gpt-oss-120b).
+    Tanpa kamus kata kunci manual (Zero Hardcoded Dictionary).
+    Menerima N sheet dengan nama kolom bebas/singkatan,
+    LLM mengenali arti semantik & menghasilkan 1 skema kanonikal baku.
+    """
+    client = get_groq_client()
+    if not client:
+        raise ValueError("GROQ_API_KEY belum disetel di file .env")
 
-    prompt = f"""You are a data engineering AI assistant.
-Your task is to map messy/abbreviated spreadsheet column headers into standard schema field names.
+    # Siapkan data ringkas (header + maksimal 2 baris sampel data untuk konteks nilai)
+    simplified_sheets = []
+    for s in sheets:
+        simplified_sheets.append({
+            "sheet_name": s.get("sheet_name", "Sheet"),
+            "headers": s.get("headers", []),
+            "sample_rows": s.get("rows", [])[:2]
+        })
 
-Standard fields and their meanings:
-- eup_inc_vat: End User Price including VAT / Tax (examples: "end user price include vat", "EUP in VAT", "EUP inc VAT")
-- eup_ex_vat: End User Price excluding VAT (examples: "end user price ex vat", "EUP ex VAT")
-- payment_rate: Payment fee rate percentage (examples: "payment rate", "pay rate")
-- payment_cost: Payment fee cost (examples: "payment cost", "biaya payment")
-- unit_price: Unit price / base price (examples: "unit price", "price per unit")
-- cogs: Cost of Goods Sold (examples: "cogs", "cost of goods sold", "hpp")
-- margin: Profit margin (examples: "margin", "gross margin")
+    prompt = f"""You are an automated schema harmonization AI engine.
+You are given headers and sample data from multiple spreadsheets created by different people or teams.
+Headers contain inconsistent naming, abbreviations (e.g., EUP = End User Price, COGS/HPP = Cost of Goods Sold, VAT/PPN = Value Added Tax), typos, or informal terms.
 
-Headers to map:
-{json.dumps(raw_headers)}
+Your goal:
+1. Discover the common canonical schema that represents all sheets. Use clean, descriptive snake_case English field names (e.g. end_user_price_incl_vat, end_user_price_excl_vat, cost_of_goods_sold, profit_margin, etc.).
+2. Map each raw header from each sheet to its corresponding canonical field name. If a column is unique, give it a clean canonical name.
 
-Return a strict JSON object with a single key "mapping" containing a dictionary where each key is the exact raw header string and the value is either one of the 7 standard field names or null if unrelated.
-Example format:
+Input Sheets Data:
+{json.dumps(simplified_sheets, indent=2)}
+
+Output strictly a JSON object with this exact structure:
 {{
-  "mapping": {{
-    "EUP in VAT": "eup_inc_vat",
-    "unknown": null
+  "canonical_fields": ["canonical_field_1", "canonical_field_2"],
+  "sheet_mappings": {{
+    "Sheet_Name": {{
+      "raw_header_name": "canonical_field_1"
+    }}
   }}
 }}"""
 
-    try:
-        response = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
-            messages=[
-                {"role": "system", "content": "You are a JSON schema mapping assistant. Output valid JSON only."},
-                {"role": "user", "content": prompt}
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.0
-        )
-        content = response.choices[0].message.content
-        data = json.loads(content)
-        mapping = data.get("mapping", {})
-        
-        valid_fields = set(FIELD_KNOWLEDGE_BASE.keys())
-        result: Dict[str, Optional[str]] = {}
-        for h in raw_headers:
-            val = mapping.get(h)
-            if val in valid_fields:
-                result[h] = val
-            else:
-                result[h] = None
-        return result
-    except Exception as e:
-        return None
+    response = client.chat.completions.create(
+        model="openai/gpt-oss-120b",
+        messages=[
+            {"role": "system", "content": "You are a database architect AI. Output valid JSON only."},
+            {"role": "user", "content": prompt}
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.0
+    )
 
-def map_headers(raw_headers: List[str]) -> Dict[str, Optional[str]]:
-    llm_result = map_headers_with_llm(raw_headers)
-    if llm_result is not None:
-        return llm_result
+    content = response.choices[0].message.content
+    data = json.loads(content)
 
-    result: Dict[str, Optional[str]] = {}
-    assigned_fields = set()
+    canonical_fields = data.get("canonical_fields", [])
+    sheet_mappings = data.get("sheet_mappings", {})
 
-    for header in raw_headers:
-        matched = match_single_header_fuzzy(header)
-        if matched and matched not in assigned_fields:
-            result[header] = matched
-            assigned_fields.add(matched)
-        elif matched and matched in assigned_fields:
-            result[header] = matched
-        else:
-            result[header] = None
+    return {
+        "canonical_fields": canonical_fields,
+        "sheet_mappings": sheet_mappings
+    }
 
-    return result
+def map_single_sheet_headers(headers: List[str], sample_rows: Optional[List[List[Any]]] = None) -> Dict[str, Optional[str]]:
+    """
+    Fungsi pembantu untuk memetakan kolom dari 1 sheet saja tanpa kamus manual.
+    """
+    sheet_payload = [{
+        "sheet_name": "InputSheet",
+        "headers": headers,
+        "rows": sample_rows or []
+    }]
+    harmonized = harmonize_sheets_schema(sheet_payload)
+    mapping = harmonized.get("sheet_mappings", {}).get("InputSheet", {})
+    return mapping

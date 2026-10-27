@@ -1,9 +1,10 @@
 import os
+import json
 import sqlite3
 from typing import List, Optional, Dict, Any
-from app.models import StandardProductItem, ProductAnalytics
-
 from contextlib import contextmanager
+
+from app.models import StandardProductItem, ProductAnalytics
 
 DEFAULT_DB_PATH = os.path.join("data", "app.db")
 
@@ -20,6 +21,7 @@ def get_db(db_path: str = DEFAULT_DB_PATH):
 def init_db(db_path: str = DEFAULT_DB_PATH) -> None:
     with get_db(db_path) as conn:
         cursor = conn.cursor()
+        # Tabel produk tunggal (kompatibilitas)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS products (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,6 +33,16 @@ def init_db(db_path: str = DEFAULT_DB_PATH) -> None:
                 unit_price REAL,
                 cogs REAL,
                 margin REAL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # Tabel rekonsiliasi multi-sheet terpadu
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS consolidated_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                batch_id TEXT,
+                source_sheet TEXT,
+                data_json TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -66,6 +78,41 @@ def save_products(items: List[StandardProductItem], db_path: str = DEFAULT_DB_PA
             inserted_count += 1
         conn.commit()
     return inserted_count
+
+def save_consolidated_records(batch_id: str, records: List[Dict[str, Any]], db_path: str = DEFAULT_DB_PATH) -> int:
+    init_db(db_path)
+    inserted = 0
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        for rec in records:
+            source = rec.get("_source_sheet", "Unknown")
+            cursor.execute("""
+                INSERT INTO consolidated_records (batch_id, source_sheet, data_json)
+                VALUES (?, ?, ?)
+            """, (batch_id, source, json.dumps(rec)))
+            inserted += 1
+        conn.commit()
+    return inserted
+
+def get_latest_consolidated_records(limit: int = 100, db_path: str = DEFAULT_DB_PATH) -> List[Dict[str, Any]]:
+    init_db(db_path)
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, batch_id, source_sheet, data_json, created_at
+            FROM consolidated_records
+            ORDER BY id DESC
+            LIMIT ?
+        """, (limit,))
+        rows = cursor.fetchall()
+        result = []
+        for r in rows:
+            item = json.loads(r["data_json"])
+            item["_id"] = r["id"]
+            item["_batch_id"] = r["batch_id"]
+            item["_created_at"] = r["created_at"]
+            result.append(item)
+        return result
 
 def get_all_products(limit: int = 100, db_path: str = DEFAULT_DB_PATH) -> List[Dict[str, Any]]:
     init_db(db_path)

@@ -1,6 +1,7 @@
 import os
 import re
-from typing import Any, Dict, List
+import uuid
+from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -8,22 +9,26 @@ from fastapi.responses import FileResponse
 from app.models import (
     SheetIngestRequest,
     IngestResponse,
-    MappingResponse,
+    MultiSheetConsolidateRequest,
+    ConsolidatedDataset,
+    HarmonizationResult,
     StandardProductItem,
     ProductAnalytics
 )
-from app.mapper import map_headers
+from app.mapper import harmonize_sheets_schema, map_single_sheet_headers
 from app.database import (
     save_products,
     get_all_products,
     get_highest_eup,
-    get_analytics
+    get_analytics,
+    save_consolidated_records,
+    get_latest_consolidated_records
 )
 
 app = FastAPI(
     title="Sheets LLM Backend API",
-    description="API otomatisasi pembaca Google Sheets, pemetaan nama kolom, dan analitik harga.",
-    version="1.0.0"
+    description="Otomatisasi pembaca Google Sheets, zero-shot LLM schema harmonization, dan konsolidasi data multi-sheet.",
+    version="2.0.0"
 )
 
 app.add_middleware(
@@ -34,26 +39,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def parse_number(val: Any) -> float:
+def parse_cell_value(val: Any) -> Any:
+    """Konversi cerdas: jika angka/mata uang ubah ke float, jika teks pertahankan string."""
     if val is None:
-        return 0.0
+        return None
     if isinstance(val, (int, float)):
         return float(val)
     s = str(val).strip()
     if not s:
-        return 0.0
-    s = re.sub(r"[^\d.,\-]", "", s)
-    if "," in s and "." in s:
-        if s.rfind(",") > s.rfind("."):
-            s = s.replace(".", "").replace(",", ".")
-        else:
-            s = s.replace(",", "")
-    elif "," in s:
-        s = s.replace(",", ".")
-    try:
-        return float(s)
-    except ValueError:
-        return 0.0
+        return None
+    # Cek apakah format angka atau mata uang
+    clean_s = re.sub(r"[^\d.,\-]", "", s)
+    if clean_s and any(c.isdigit() for c in clean_s):
+        if "," in clean_s and "." in clean_s:
+            if clean_s.rfind(",") > clean_s.rfind("."):
+                clean_s = clean_s.replace(".", "").replace(",", ".")
+            else:
+                clean_s = clean_s.replace(",", "")
+        elif "," in clean_s:
+            clean_s = clean_s.replace(",", ".")
+        try:
+            return float(clean_s)
+        except ValueError:
+            return s
+    return s
 
 @app.get("/")
 def root():
@@ -62,7 +71,7 @@ def root():
         return FileResponse(index_file)
     return {
         "status": "online",
-        "service": "Sheets LLM Backend",
+        "service": "Sheets LLM Backend v2 (Multi-Sheet Harmonizer)",
         "docs_url": "/docs"
     }
 
@@ -73,22 +82,104 @@ def view_dashboard():
         return FileResponse(index_file)
     raise HTTPException(status_code=404, detail="Dashboard file not found")
 
-@app.post("/api/preview-mapping", response_model=MappingResponse)
-def preview_mapping(headers: List[str]):
-    mapping = map_headers(headers)
-    unmapped = [h for h, field in mapping.items() if field is None]
-    return MappingResponse(
-        mapped_columns=mapping,
-        unmapped_columns=unmapped
+@app.post("/api/harmonize-schema", response_model=HarmonizationResult)
+def preview_harmonization(payload: MultiSheetConsolidateRequest):
+    """
+    Zero-Shot Schema Discovery via LLM.
+    Menerima N sheet dengan nama kolom acak, mengembalikan skema kanonikal & pemetaan tiap sheet.
+    Tanpa kamus manual.
+    """
+    if not payload.sheets:
+        raise HTTPException(status_code=400, detail="Daftar sheet tidak boleh kosong")
+
+    sheets_data = [s.model_dump() for s in payload.sheets]
+    try:
+        harmonized = harmonize_sheets_schema(sheets_data)
+        return HarmonizationResult(
+            canonical_fields=harmonized["canonical_fields"],
+            sheet_mappings=harmonized["sheet_mappings"]
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gagal melakukan harmonisasi LLM: {str(e)}")
+
+@app.post("/api/consolidate", response_model=ConsolidatedDataset)
+def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
+    """
+    Konsolidasi Multi-Sheet ke 1 Tabel Baku Terstruktur.
+    1. Kirim semua sheet ke LLM untuk harmonisasi skema serentak.
+    2. Transformasi semua baris data dari masing-masing sheet ke skema kanonikal.
+    3. Simpan ke database & kembalikan 1 dataset utuh yang seragam.
+    """
+    if not payload.sheets:
+        raise HTTPException(status_code=400, detail="Daftar sheet tidak boleh kosong")
+
+    sheets_data = [s.model_dump() for s in payload.sheets]
+
+    try:
+        harmonized = harmonize_sheets_schema(sheets_data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gagal harmonisasi via LLM: {str(e)}")
+
+    canonical_fields = harmonized.get("canonical_fields", [])
+    sheet_mappings = harmonized.get("sheet_mappings", {})
+
+    all_consolidated_records: List[Dict[str, Any]] = []
+    batch_id = f"batch_{uuid.uuid4().hex[:8]}"
+
+    for sheet in payload.sheets:
+        s_name = sheet.sheet_name
+        headers = sheet.headers
+        rows = sheet.rows
+
+        # Dapatkan mapping untuk sheet ini
+        s_mapping = sheet_mappings.get(s_name, {})
+        # Hubungkan index kolom asli ke nama field kanonikal
+        index_to_canonical: Dict[int, str] = {}
+        for idx, h in enumerate(headers):
+            canonical = s_mapping.get(h)
+            if canonical:
+                index_to_canonical[idx] = canonical
+
+        for row in rows:
+            record: Dict[str, Any] = {
+                "_source_sheet": s_name
+            }
+            # Isi nilai untuk semua canonical field
+            for c_field in canonical_fields:
+                record[c_field] = None
+
+            # Petakan nilai baris asli ke field kanonikal
+            for idx, c_field in index_to_canonical.items():
+                if idx < len(row):
+                    record[c_field] = parse_cell_value(row[idx])
+
+            all_consolidated_records.append(record)
+
+    # Simpan ke database
+    save_consolidated_records(batch_id, all_consolidated_records)
+
+    return ConsolidatedDataset(
+        status="success",
+        total_sheets=len(payload.sheets),
+        total_records=len(all_consolidated_records),
+        canonical_fields=canonical_fields,
+        sheet_mappings=sheet_mappings,
+        records=all_consolidated_records
     )
 
+@app.get("/api/consolidated-records")
+def list_consolidated_records(limit: int = 100):
+    """Melihat data hasil konsolidasi multi-sheet yang tersimpan di database."""
+    return get_latest_consolidated_records(limit=limit)
+
+# --- Endpoint Single Sheet Ingest ---
 @app.post("/api/ingest", response_model=IngestResponse)
 def ingest_sheet_data(payload: SheetIngestRequest):
     if not payload.headers or not payload.rows:
         raise HTTPException(status_code=400, detail="Headers and rows cannot be empty")
 
-    column_mapping = map_headers(payload.headers)
-    
+    column_mapping = map_single_sheet_headers(payload.headers, payload.rows[:2])
+
     header_indices = {}
     for idx, header in enumerate(payload.headers):
         field_name = column_mapping.get(header)
@@ -102,9 +193,7 @@ def ingest_sheet_data(payload: SheetIngestRequest):
         for field_name, idx in header_indices.items():
             if idx < len(row):
                 raw_value = row[idx]
-                item_data[field_name] = parse_number(raw_value)
-            else:
-                item_data[field_name] = 0.0
+                item_data[field_name] = parse_cell_value(raw_value) or 0.0
 
         item = StandardProductItem(**item_data)
         standard_items.append(item)
