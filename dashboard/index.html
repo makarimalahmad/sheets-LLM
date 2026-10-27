@@ -33,7 +33,7 @@
             <h2 class="text-lg font-bold text-slate-900">Konsolidasi Data Multi-Sheet</h2>
             <p class="text-xs text-slate-500">Menyelaraskan nama kolom yang berbeda dari beberapa sheet menjadi satu format standar.</p>
           </div>
-          <button onclick="loadMultiSheetSample()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded text-xs font-semibold text-slate-700">Muat Contoh Data</button>
+          <button onclick="loadMultiSheetSample()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded text-xs font-semibold text-slate-700">Muat Contoh 5 Sheet</button>
         </div>
 
         <div class="mb-4">
@@ -165,16 +165,30 @@
         },
         {
           sheet_name: "Sheet 2",
-          headers: ["end user price include vat", "end user price ex vat", "pay rate", "pay cost", "harga unit", "cost of goods", "profit margin"],
+          headers: ["end user price include vat", "end user price ex vat", "pay rate", "pay cost", "price per unit", "cost of goods sold", "profit margin"],
           rows: [
             ["500000", "450000", "0.03", "15000", "450000", "300000", "150000"]
           ]
         },
         {
           sheet_name: "Sheet 3",
-          headers: ["harga user + ppn", "harga user tanpa ppn", "rate payment %", "biaya payment", "unit price", "hpp", "untung"],
+          headers: ["harga user + ppn", "harga user tanpa ppn", "rate bayar %", "biaya bayar", "harga per unit", "hpp", "laba kotor"],
           rows: [
             ["1200000", "1081081", "3%", "36000", "1081081", "700000", "381081"]
+          ]
+        },
+        {
+          sheet_name: "Sheet 4",
+          headers: ["harga konsumen incl tax", "harga konsumen sebelum tax", "fee payment %", "biaya transaksi", "harga barang", "modal pokok", "keuntungan"],
+          rows: [
+            ["750000", "675675", "0.025", "18750", "675675", "450000", "225675"]
+          ]
+        },
+        {
+          sheet_name: "Sheet 5",
+          headers: ["User Price + Tax", "Nett Price - Tax", "Rate PG %", "MDR Cost", "Base Unit Price", "HPP Barang", "Untung Bersih"],
+          rows: [
+            ["350000", "315315", "0.03", "10500", "315315", "200000", "115315"]
           ]
         }
       ]

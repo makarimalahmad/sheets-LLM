@@ -193,7 +193,24 @@ def ingest_sheet_data(payload: SheetIngestRequest):
         for field_name, idx in header_indices.items():
             if idx < len(row):
                 raw_value = row[idx]
-                item_data[field_name] = parse_cell_value(raw_value) or 0.0
+                val = parse_cell_value(raw_value) or 0.0
+                fn = field_name.lower()
+                if "incl" in fn or ("vat" in fn and "excl" not in fn and "without" not in fn and "tanpa" not in fn) or "ppn" in fn:
+                    item_data["eup_inc_vat"] = val
+                elif "excl" in fn or "without" in fn or "tanpa" in fn:
+                    item_data["eup_ex_vat"] = val
+                elif "goods" in fn or "cogs" in fn or "hpp" in fn or "modal" in fn:
+                    item_data["cogs"] = val
+                elif "margin" in fn or "profit" in fn or "untung" in fn or "laba" in fn:
+                    item_data["margin"] = val
+                elif "rate" in fn or "persen" in fn:
+                    item_data["payment_rate"] = val
+                elif "cost" in fn or "fee" in fn or "biaya" in fn or "ongkos" in fn:
+                    item_data["payment_cost"] = val
+                elif "unit" in fn or "satuan" in fn or "price" in fn:
+                    item_data["unit_price"] = val
+                else:
+                    item_data[field_name] = val
 
         item = StandardProductItem(**item_data)
         standard_items.append(item)
