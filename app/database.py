@@ -8,6 +8,7 @@ from app.models import StandardProductItem, ProductAnalytics
 
 DEFAULT_DB_PATH = os.path.join("data", "app.db")
 
+# Buka koneksi ke file database SQLite
 @contextmanager
 def get_db(db_path: str = DEFAULT_DB_PATH):
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
@@ -18,6 +19,7 @@ def get_db(db_path: str = DEFAULT_DB_PATH):
     finally:
         conn.close()
 
+# Buat tabel jika belum ada
 def init_db(db_path: str = DEFAULT_DB_PATH) -> None:
     with get_db(db_path) as conn:
         cursor = conn.cursor()
@@ -46,6 +48,7 @@ def init_db(db_path: str = DEFAULT_DB_PATH) -> None:
         """)
         conn.commit()
 
+# Simpan data produk satu sheet
 def save_products(items: List[StandardProductItem], db_path: str = DEFAULT_DB_PATH) -> int:
     init_db(db_path)
     inserted_count = 0
@@ -77,6 +80,7 @@ def save_products(items: List[StandardProductItem], db_path: str = DEFAULT_DB_PA
         conn.commit()
     return inserted_count
 
+# Simpan hasil gabungan baris multi-sheet
 def save_consolidated_records(batch_id: str, records: List[Dict[str, Any]], db_path: str = DEFAULT_DB_PATH) -> int:
     init_db(db_path)
     inserted = 0
@@ -92,6 +96,7 @@ def save_consolidated_records(batch_id: str, records: List[Dict[str, Any]], db_p
         conn.commit()
     return inserted
 
+# Ambil data gabungan terbaru
 def get_latest_consolidated_records(limit: int = 100, db_path: str = DEFAULT_DB_PATH) -> List[Dict[str, Any]]:
     init_db(db_path)
     with get_db(db_path) as conn:
@@ -112,6 +117,7 @@ def get_latest_consolidated_records(limit: int = 100, db_path: str = DEFAULT_DB_
             result.append(item)
         return result
 
+# Ambil semua data produk
 def get_all_products(limit: int = 100, db_path: str = DEFAULT_DB_PATH) -> List[Dict[str, Any]]:
     init_db(db_path)
     with get_db(db_path) as conn:
@@ -122,6 +128,7 @@ def get_all_products(limit: int = 100, db_path: str = DEFAULT_DB_PATH) -> List[D
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
 
+# Cari produk dengan harga EUP termahal
 def get_highest_eup(db_path: str = DEFAULT_DB_PATH) -> Optional[Dict[str, Any]]:
     init_db(db_path)
     with get_db(db_path) as conn:
@@ -132,6 +139,7 @@ def get_highest_eup(db_path: str = DEFAULT_DB_PATH) -> Optional[Dict[str, Any]]:
         row = cursor.fetchone()
         return dict(row) if row else None
 
+# Hitung ringkasan angka statistik produk
 def get_analytics(db_path: str = DEFAULT_DB_PATH) -> ProductAnalytics:
     init_db(db_path)
     with get_db(db_path) as conn:

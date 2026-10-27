@@ -39,6 +39,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Ubah teks angka atau mata uang menjadi float
 def parse_cell_value(val: Any) -> Any:
     if val is None:
         return None
@@ -62,6 +63,7 @@ def parse_cell_value(val: Any) -> Any:
             return s
     return s
 
+# Tampilkan dashboard HTML
 @app.get("/")
 def root():
     index_file = os.path.join("dashboard", "index.html")
@@ -69,7 +71,7 @@ def root():
         return FileResponse(index_file)
     return {
         "status": "online",
-        "service": "Sheets LLM Backend v2 (Multi-Sheet Harmonizer)",
+        "service": "Sheets LLM Backend",
         "docs_url": "/docs"
     }
 
@@ -80,6 +82,7 @@ def view_dashboard():
         return FileResponse(index_file)
     raise HTTPException(status_code=404, detail="Dashboard file not found")
 
+# Preview pemetaan kolom standar dari beberapa sheet
 @app.post("/api/harmonize-schema", response_model=HarmonizationResult)
 def preview_harmonization(payload: MultiSheetConsolidateRequest):
     if not payload.sheets:
@@ -95,6 +98,7 @@ def preview_harmonization(payload: MultiSheetConsolidateRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gagal memproses nama kolom: {str(e)}")
 
+# Gabungkan data dari banyak sheet menjadi 1 tabel standar
 @app.post("/api/consolidate", response_model=ConsolidatedDataset)
 def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
     if not payload.sheets:
@@ -149,10 +153,12 @@ def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
         records=all_consolidated_records
     )
 
+# Ambil riwayat data gabungan dari database
 @app.get("/api/consolidated-records")
 def list_consolidated_records(limit: int = 100):
     return get_latest_consolidated_records(limit=limit)
 
+# Terima dan simpan data sheet tunggal
 @app.post("/api/ingest", response_model=IngestResponse)
 def ingest_sheet_data(payload: SheetIngestRequest):
     if not payload.headers or not payload.rows:
@@ -204,10 +210,12 @@ def ingest_sheet_data(payload: SheetIngestRequest):
         column_mapping=column_mapping
     )
 
+# Ambil daftar produk yang tersimpan
 @app.get("/api/products")
 def list_products(limit: int = 100):
     return get_all_products(limit=limit)
 
+# Ambil produk dengan harga EUP termahal
 @app.get("/api/products/highest-eup")
 def highest_eup_product():
     product = get_highest_eup()
@@ -215,6 +223,7 @@ def highest_eup_product():
         raise HTTPException(status_code=404, detail="No product data found")
     return product
 
+# Hitung ringkasan statistik produk untuk dashboard
 @app.get("/api/analytics", response_model=ProductAnalytics)
 def analytics():
     return get_analytics()
