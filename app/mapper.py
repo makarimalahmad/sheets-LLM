@@ -2,22 +2,31 @@ import os
 import json
 from typing import Dict, List, Optional, Any
 from dotenv import load_dotenv
-from groq import Groq
+from openai import OpenAI
 
 load_dotenv()
 
-# Ambil koneksi client Groq API
-def get_groq_client() -> Optional[Groq]:
-    api_key = os.getenv("GROQ_API_KEY", "").strip()
+# Ambil koneksi client LLM Universal (Kompatibel dengan semua provider)
+def get_llm_client() -> Optional[OpenAI]:
+    api_key = os.getenv("LLM_API_KEY") or os.getenv("GROQ_API_KEY") or ""
+    api_key = api_key.strip()
     if not api_key:
         return None
-    return Groq(api_key=api_key)
+
+    base_url = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1").strip()
+    return OpenAI(api_key=api_key, base_url=base_url)
+
+# Ambil nama model LLM dari konfigurasi .env
+def get_llm_model() -> str:
+    return os.getenv("LLM_MODEL", "openai/gpt-oss-120b").strip()
 
 # Minta LLM menyatukan nama-nama kolom dari berbagai sheet menjadi 1 format standar
 def harmonize_sheets_schema(sheets: List[Dict[str, Any]]) -> Dict[str, Any]:
-    client = get_groq_client()
+    client = get_llm_client()
     if not client:
-        raise ValueError("GROQ_API_KEY belum disetel di file .env")
+        raise ValueError("LLM_API_KEY atau GROQ_API_KEY belum disetel di file .env")
+
+    model_name = get_llm_model()
 
     # Ambil nama kolom dan 2 contoh baris isi data untuk dianalisis LLM
     simplified_sheets = []
@@ -52,7 +61,7 @@ Keluarkan format HANYA objek JSON dengan struktur persis seperti ini:
 }}"""
 
     response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
+        model=model_name,
         messages=[
             {"role": "system", "content": "Kamu adalah sistem standarisasi data. Hanya balas dalam format JSON yang valid."},
             {"role": "user", "content": prompt}
