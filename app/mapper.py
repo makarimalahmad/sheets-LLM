@@ -28,25 +28,25 @@ def harmonize_sheets_schema(sheets: List[Dict[str, Any]]) -> Dict[str, Any]:
             "sample_rows": s.get("rows", [])[:2]
         })
 
-    prompt = f"""You are an automated schema harmonization engine.
-You are given headers and sample row values from multiple different spreadsheets created by various users or systems.
-Columns representing the exact same conceptual information across different sheets may have different wording, abbreviations, languages, or casing.
+    prompt = f"""Kamu adalah sistem AI untuk standarisasi nama kolom data spreadsheet.
+Kamu diberikan daftar nama kolom dan contoh nilai baris dari beberapa sheet berbeda.
+Setiap sheet bisa menggunakan kata, singkatan, bahasa, atau penulisan yang berbeda untuk informasi yang sebenarnya sama.
 
-Your task:
-1. Deduce the semantic meaning of each column purely from its header string and its sample cell values.
-2. Unify columns across different sheets that represent the exact same concept under ONE single canonical field name (formatted in descriptive, clean snake_case).
-3. STRICT CONSTRAINT - 1-to-1 Mapping Per Sheet: Two distinct columns within the SAME sheet must NEVER map to the same canonical field. If a sheet has two separate columns (such as end-user price excluding tax vs unit price, or payment rate vs payment cost), treat them as separate distinct attributes and give each its own unique canonical field name.
-4. Provide a mapping from every raw header of each sheet to its corresponding canonical field name.
+Tugas kamu:
+1. Pahami arti setiap kolom dari teks nama kolom dan contoh isi nilainya.
+2. Satukan kolom dari berbagai sheet yang memiliki makna sama ke dalam SATU nama kolom standar (ditulis dalam format snake_case bahasa Inggris, contoh: end_user_price_incl_vat, payment_rate, unit_price, cost_of_goods_sold, profit_margin).
+3. ATURAN KETAT - 1-ke-1 per Sheet: Dua kolom yang berbeda dalam SATU sheet yang sama TIDAK BOLEH disamakan ke satu nama standar yang sama. Jika ada sheet yang memiliki dua kolom terpisah (misalnya harga sebelum pajak dan harga per unit, atau rate pembayaran dan biaya pembayaran), perlakukan sebagai dua hal terpisah dan berikan masing-masing nama standar yang berbeda.
+4. Buat pemetaan dari setiap nama kolom asli ke nama kolom standar yang sesuai.
 
-Input Sheets Data:
+Data Sheet:
 {json.dumps(simplified_sheets, indent=2)}
 
-Output strictly a JSON object with this exact structure:
+Keluarkan format HANYA objek JSON dengan struktur persis seperti ini:
 {{
-  "canonical_fields": ["field_name_1", "field_name_2"],
+  "standard_columns": ["nama_standar_1", "nama_standar_2"],
   "sheet_mappings": {{
-    "Sheet_Name": {{
-      "original_header_name": "field_name_1"
+    "Nama_Sheet": {{
+      "nama_kolom_asli": "nama_standar_1"
     }}
   }}
 }}"""
@@ -54,7 +54,7 @@ Output strictly a JSON object with this exact structure:
     response = client.chat.completions.create(
         model="openai/gpt-oss-120b",
         messages=[
-            {"role": "system", "content": "You are a database architect AI. Output valid JSON only."},
+            {"role": "system", "content": "Kamu adalah sistem standarisasi data. Hanya balas dalam format JSON yang valid."},
             {"role": "user", "content": prompt}
         ],
         response_format={"type": "json_object"},
@@ -64,11 +64,12 @@ Output strictly a JSON object with this exact structure:
     content = response.choices[0].message.content
     data = json.loads(content)
 
-    canonical_fields = data.get("canonical_fields", [])
+    standard_columns = data.get("standard_columns") or data.get("canonical_fields") or []
     sheet_mappings = data.get("sheet_mappings", {})
 
     return {
-        "canonical_fields": canonical_fields,
+        "canonical_fields": standard_columns,
+        "standard_columns": standard_columns,
         "sheet_mappings": sheet_mappings
     }
 
