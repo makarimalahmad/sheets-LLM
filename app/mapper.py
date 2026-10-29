@@ -8,23 +8,27 @@ load_dotenv()
 
 # Ambil koneksi client LLM Universal (Kompatibel dengan semua provider)
 def get_llm_client() -> Optional[OpenAI]:
-    api_key = os.getenv("LLM_API_KEY") or os.getenv("GROQ_API_KEY") or ""
-    api_key = api_key.strip()
+    api_key = os.getenv("LLM_API_KEY", "").strip()
     if not api_key:
         return None
 
-    base_url = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1").strip()
-    return OpenAI(api_key=api_key, base_url=base_url)
+    base_url = os.getenv("LLM_BASE_URL", "").strip()
+    if base_url:
+        return OpenAI(api_key=api_key, base_url=base_url)
+    return OpenAI(api_key=api_key)
 
 # Ambil nama model LLM dari konfigurasi .env
 def get_llm_model() -> str:
-    return os.getenv("LLM_MODEL", "openai/gpt-oss-120b").strip()
+    model_name = os.getenv("LLM_MODEL", "").strip()
+    if not model_name:
+        raise ValueError("Variabel LLM_MODEL belum disetel di file .env")
+    return model_name
 
 # Minta LLM menyatukan nama-nama kolom dari berbagai sheet menjadi 1 format standar
 def harmonize_sheets_schema(sheets: List[Dict[str, Any]]) -> Dict[str, Any]:
     client = get_llm_client()
     if not client:
-        raise ValueError("LLM_API_KEY atau GROQ_API_KEY belum disetel di file .env")
+        raise ValueError("Variabel LLM_API_KEY belum disetel di file .env")
 
     model_name = get_llm_model()
 
