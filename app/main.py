@@ -159,6 +159,31 @@ def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
 def list_consolidated_records(limit: int = 100):
     return get_latest_consolidated_records(limit=limit)
 
+# Ambil data dengan harga EUP tertinggi dari hasil gabungan
+@app.get("/api/consolidated-records/highest-eup")
+def get_highest_consolidated_eup():
+    data = get_latest_consolidated_records()
+    records = data.get("records", [])
+    if not records:
+        raise HTTPException(status_code=404, detail="Belum ada data gabungan tersimpan")
+
+    eup_field = None
+    for k in records[0].keys():
+        if "incl_vat" in k or "eup" in k:
+            eup_field = k
+            break
+
+    if not eup_field:
+        raise HTTPException(status_code=404, detail="Kolom EUP tidak ditemukan di tabel")
+
+    highest_record = max(records, key=lambda r: float(r.get(eup_field) or 0))
+    return {
+        "field": eup_field,
+        "highest_value": highest_record.get(eup_field),
+        "source_sheet": highest_record.get("_source_sheet"),
+        "record": highest_record
+    }
+
 # Hapus semua riwayat data di database
 @app.delete("/api/clear-data")
 def clear_data():
