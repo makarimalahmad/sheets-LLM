@@ -34,7 +34,7 @@ Setiap sheet bisa menggunakan kata, singkatan, bahasa, atau penulisan yang berbe
 
 Tugas kamu:
 1. Pahami arti setiap kolom dari teks nama kolom dan contoh isi nilainya.
-2. Satukan kolom dari berbagai sheet yang memiliki makna sama ke dalam SATU nama kolom standar (ditulis dalam format snake_case bahasa Inggris, contoh: end_user_price_incl_vat, payment_rate, unit_price, cost_of_goods_sold, profit_margin).
+2. Satukan kolom dari berbagai sheet yang memiliki makna sama ke dalam SATU nama kolom standar (ditulis dalam format snake_case bahasa Inggris, contoh: end_user_price_incl_vat, payment_rate, unit_price, cogs, margin). Gunakan nama ringkas 'cogs' untuk biaya pokok/HPP, dan 'margin' untuk keuntungan.
 3. ATURAN KETAT - 1-ke-1 per Sheet: Dua kolom yang berbeda dalam SATU sheet yang sama TIDAK BOLEH disamakan ke satu nama standar yang sama. Jika ada sheet yang memiliki dua kolom terpisah (misalnya harga sebelum pajak dan harga per unit, atau rate pembayaran dan biaya pembayaran), perlakukan sebagai dua hal terpisah dan berikan masing-masing nama standar yang berbeda.
 4. Buat pemetaan dari setiap nama kolom asli ke nama kolom standar yang sesuai.
 
