@@ -19,172 +19,39 @@
       </div>
     </header>
 
-    <!-- Main Container: Konsolidasi Multi-Sheet -->
-    <div class="space-y-6">
+    <!-- Hasil Penyelarasan & Tabel Data -->
+    <div id="multi-result-container" class="space-y-6">
       <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
-        <div class="flex justify-between items-center mb-4">
-          <div>
-            <h2 class="text-lg font-bold text-slate-900">Penggabungan Kolom dari Berbagai Sheet</h2>
+        <h3 class="text-md font-bold text-slate-900 mb-2">1. Nama Kolom Standar yang Dibuat AI</h3>
+        <div id="canonical-tags" class="flex flex-wrap gap-2 mb-4">
+          <span class="text-xs text-slate-400">Belum ada data. Silakan sinkronkan melalui Google Sheets.</span>
+        </div>
+
+        <div id="mapping-section" class="hidden">
+          <h3 class="text-md font-bold text-slate-900 mb-2">2. Penyesuaian Kolom Tiap Sheet</h3>
+          <div class="overflow-x-auto">
+            <pre id="mapping-matrix" class="p-3 bg-slate-100 rounded text-xs text-slate-700 overflow-x-auto font-mono"></pre>
           </div>
-          <button onclick="loadMultiSheetSample()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded text-xs font-semibold text-slate-700">Muat Contoh 5 Sheet</button>
         </div>
-
-        <div class="mb-4">
-          <label class="block text-xs font-medium text-slate-600 mb-1">Data Spreadsheet (Format JSON):</label>
-          <textarea id="multi-sheet-json" rows="10" class="w-full text-xs p-3 border rounded border-slate-300 font-mono bg-slate-900 text-emerald-400"></textarea>
-        </div>
-
-        <button id="btn-run-harmonize" onclick="runConsolidation()" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium text-sm flex justify-center items-center gap-2">
-          <span>Gabungkan Semua Sheet</span>
-        </button>
       </div>
 
-      <!-- Hasil Penyelarasan Kolom -->
-      <div id="multi-result-container" class="hidden space-y-6">
-        <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
-          <h3 class="text-md font-bold text-slate-900 mb-2">1. Nama Kolom Standar yang Dibuat AI</h3>
-          <div id="canonical-tags" class="flex flex-wrap gap-2 mb-4"></div>
-
-          <div id="mapping-section">
-            <h3 class="text-md font-bold text-slate-900 mb-2">2. Penyesuaian Kolom Tiap Sheet</h3>
-            <div class="overflow-x-auto">
-              <pre id="mapping-matrix" class="p-3 bg-slate-100 rounded text-xs text-slate-700 overflow-x-auto font-mono"></pre>
-            </div>
-          </div>
-        </div>
-
-        <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
-          <h3 class="text-md font-bold text-slate-900 mb-3">3. Tabel Data Gabungan</h3>
-          <div class="overflow-x-auto">
-            <table class="w-full text-left text-xs border-collapse">
-              <thead id="consolidated-table-head" class="bg-slate-100 border-b border-slate-200 text-slate-700 font-semibold"></thead>
-              <tbody id="consolidated-table-body" class="divide-y divide-slate-100"></tbody>
-            </table>
-          </div>
+      <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+        <h3 class="text-md font-bold text-slate-900 mb-3">3. Tabel Data Gabungan</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead id="consolidated-table-head" class="bg-slate-100 border-b border-slate-200 text-slate-700 font-semibold"></thead>
+            <tbody id="consolidated-table-body" class="divide-y divide-slate-100">
+              <tr>
+                <td class="p-4 text-center text-slate-400">Belum ada data tersimpan.</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
   </div>
 
   <script>
-    const sampleMultiSheets = {
-      sheets: [
-        {
-          sheet_name: "Sheet 1",
-          headers: ["EUP in VAT", "EUP ex VAT", "payment rate", "payment cost", "unit price", "cogs", "margin"],
-          rows: [
-            ["250000", "225000", "0.03", "7500", "225000", "150000", "75000"]
-          ]
-        },
-        {
-          sheet_name: "Sheet 2",
-          headers: ["end user price include vat", "end user price ex vat", "pay rate", "pay cost", "price per unit", "cost of goods sold", "profit margin"],
-          rows: [
-            ["500000", "450000", "0.03", "15000", "450000", "300000", "150000"]
-          ]
-        },
-        {
-          sheet_name: "Sheet 3",
-          headers: ["harga user + ppn", "harga user tanpa ppn", "rate bayar %", "biaya bayar", "harga per unit", "hpp", "laba kotor"],
-          rows: [
-            ["1200000", "1081081", "3%", "36000", "1081081", "700000", "381081"]
-          ]
-        },
-        {
-          sheet_name: "Sheet 4",
-          headers: ["harga konsumen incl tax", "harga konsumen sebelum tax", "fee payment %", "biaya transaksi", "harga barang", "modal pokok", "keuntungan"],
-          rows: [
-            ["750000", "675675", "0.025", "18750", "675675", "450000", "225675"]
-          ]
-        },
-        {
-          sheet_name: "Sheet 5",
-          headers: ["User Price + Tax", "Nett Price - Tax", "Rate PG %", "MDR Cost", "Base Unit Price", "HPP Barang", "Untung Bersih"],
-          rows: [
-            ["350000", "315315", "0.03", "10500", "315315", "200000", "115315"]
-          ]
-        }
-      ]
-    };
-
-    function loadMultiSheetSample() {
-      document.getElementById('multi-sheet-json').value = JSON.stringify(sampleMultiSheets, null, 2);
-    }
-
-    async function runConsolidation() {
-      const btn = document.getElementById('btn-run-harmonize');
-      const textVal = document.getElementById('multi-sheet-json').value.trim();
-      if (!textVal) {
-        alert("Data spreadsheet kosong");
-        return;
-      }
-
-      let payload;
-      try {
-        payload = JSON.parse(textVal);
-      } catch (e) {
-        alert("Format data tidak valid: " + e.message);
-        return;
-      }
-
-      btn.disabled = true;
-      btn.innerText = "Sedang Memproses...";
-
-      try {
-        const res = await fetch('/api/consolidate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.detail || "Gagal menggabungkan data");
-        }
-
-        const data = await res.json();
-
-        // Render Kolom Standar
-        const tagsContainer = document.getElementById('canonical-tags');
-        tagsContainer.innerHTML = data.canonical_fields.map(f => `
-          <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded font-mono text-xs font-semibold">${f}</span>
-        `).join('');
-
-        // Render Penyesuaian Kolom
-        const mappingBox = document.getElementById('mapping-section');
-        if (data.sheet_mappings && Object.keys(data.sheet_mappings).length > 0) {
-          document.getElementById('mapping-matrix').innerText = JSON.stringify(data.sheet_mappings, null, 2);
-          mappingBox.classList.remove('hidden');
-        } else {
-          mappingBox.classList.add('hidden');
-        }
-
-        // Render Tabel Gabungan
-        const thead = document.getElementById('consolidated-table-head');
-        const cols = ["_source_sheet", ...data.canonical_fields];
-        thead.innerHTML = `<tr>${cols.map(c => `<th class="p-2.5">${c}</th>`).join('')}</tr>`;
-
-        const tbody = document.getElementById('consolidated-table-body');
-        tbody.innerHTML = data.records.map(r => `
-          <tr class="hover:bg-slate-50">
-            <td class="p-2.5 font-bold text-slate-800">${r._source_sheet}</td>
-            ${data.canonical_fields.map(f => {
-              const val = r[f];
-              const display = (typeof val === 'number') ? val.toLocaleString('id-ID') : (val !== null ? val : '-');
-              return `<td class="p-2.5 font-mono text-slate-700">${display}</td>`;
-            }).join('')}
-          </tr>
-        `).join('');
-
-        document.getElementById('multi-result-container').classList.remove('hidden');
-      } catch (err) {
-        alert("Error: " + err.message);
-      } finally {
-        btn.disabled = false;
-        btn.innerText = "Gabungkan Semua Sheet";
-      }
-    }
-
     async function refreshData() {
       try {
         const res = await fetch('/api/consolidated-records');
@@ -224,8 +91,11 @@
           } else {
             mappingBox.classList.add('hidden');
           }
-
-          document.getElementById('multi-result-container').classList.remove('hidden');
+        } else {
+          document.getElementById('consolidated-table-head').innerHTML = '';
+          document.getElementById('consolidated-table-body').innerHTML = '<tr><td class="p-4 text-center text-slate-400">Belum ada data tersimpan.</td></tr>';
+          document.getElementById('canonical-tags').innerHTML = '<span class="text-xs text-slate-400">Belum ada data. Silakan sinkronkan melalui Google Sheets.</span>';
+          document.getElementById('mapping-section').classList.add('hidden');
         }
       } catch (err) {
         console.error("Gagal refresh data:", err);
@@ -236,10 +106,7 @@
       if (!confirm("Bersihkan semua riwayat data lama di database?")) return;
       try {
         await fetch('/api/clear-data', { method: 'DELETE' });
-        document.getElementById('consolidated-table-body').innerHTML = '';
-        document.getElementById('consolidated-table-head').innerHTML = '';
-        document.getElementById('canonical-tags').innerHTML = '';
-        document.getElementById('multi-result-container').classList.add('hidden');
+        await refreshData();
         alert("Riwayat data lama berhasil dibersihkan.");
       } catch (err) {
         alert("Gagal membersihkan data: " + err);
@@ -247,7 +114,6 @@
     }
 
     // Inisialisasi awal
-    loadMultiSheetSample();
     refreshData();
   </script>
 </body>
