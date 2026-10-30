@@ -1,7 +1,7 @@
 #!/bin/bash
-# Script restart server otomatis
-echo "Menghentikan server lama di port 80..."
-sudo fuser -k 80/tcp 2>/dev/null || true
+# Hentikan HANYA proses Sheets LLM (tidak mematikan program lain)
+echo "Menghentikan server Sheets LLM..."
+pkill -f "run_server.py" 2>/dev/null || true
 sleep 1
 
 echo "Menjalankan ulang server Sheets LLM..."
