@@ -30,6 +30,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Simpan data sementara di memori RAM server (100% tanpa file database)
+LATEST_MEMORY_DATA: Dict[str, Any] = {}
+
 # Ubah teks angka atau mata uang menjadi float
 def parse_cell_value(val: Any) -> Any:
     if val is None:
@@ -76,6 +79,8 @@ def view_dashboard():
 # Gabungkan data dari banyak sheet menjadi 1 tabel standar via AI
 @app.post("/api/consolidate", response_model=ConsolidatedDataset)
 def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
+    global LATEST_MEMORY_DATA
+
     if not payload.sheets:
         raise HTTPException(status_code=400, detail="Daftar sheet tidak boleh kosong")
 
@@ -116,8 +121,7 @@ def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
 
             all_consolidated_records.append(record)
 
-    # Langsung kembalikan hasil ke frontend tanpa database
-    return ConsolidatedDataset(
+    result = ConsolidatedDataset(
         status="success",
         total_sheets=len(payload.sheets),
         total_records=len(all_consolidated_records),
@@ -125,6 +129,16 @@ def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
         sheet_mappings=sheet_mappings,
         records=all_consolidated_records
     )
+
+    # Simpan hasil terbaru di RAM server
+    LATEST_MEMORY_DATA = result.model_dump()
+
+    return result
+
+# Ambil data terbaru yang tersimpan di RAM server
+@app.get("/api/latest-data")
+def get_latest_data():
+    return LATEST_MEMORY_DATA
 
 # Tarik data dari link Google Sheets dan gabungkan langsung via AI
 @app.post("/api/pull-google-sheets", response_model=ConsolidatedDataset)
@@ -138,7 +152,6 @@ async def pull_google_sheets(req: PullGoogleSheetsRequest):
     except Exception:
         raise HTTPException(status_code=400, detail="Gagal mengambil ID dari link Google Sheets")
 
-    # Daftar tab yang akan ditarik
     target_tabs = req.tab_names or ["Sheet1", "Sheet2", "Sheet3", "Sheet4", "Sheet5"]
     sheets_payload: List[SingleSheetPayload] = []
 
@@ -165,5 +178,4 @@ async def pull_google_sheets(req: PullGoogleSheetsRequest):
             detail="Gagal membaca data dari link. Pastikan akses Google Sheets diatur ke 'Siapa saja yang memiliki link dapat melihat'."
         )
 
-    # Kirim data ke AI dan langsung kembalikan hasilnya
     return consolidate_multi_sheets(MultiSheetConsolidateRequest(sheets=sheets_payload))

@@ -14,6 +14,7 @@
       </div>
       <div class="flex gap-2">
         <a href="/docs" target="_blank" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded text-sm font-medium">Dokumentasi API</a>
+        <button onclick="fetchLatestData()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium">Perbarui Data</button>
       </div>
     </header>
 
@@ -47,7 +48,7 @@
       <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
         <h3 class="text-md font-bold text-slate-900 mb-2">1. Nama Kolom Standar yang Dibuat AI</h3>
         <div id="canonical-tags" class="flex flex-wrap gap-2 mb-4">
-          <span class="text-xs text-slate-400">Belum ada data. Silakan tempel link dan klik Run.</span>
+          <span class="text-xs text-slate-400">Belum ada data. Silakan kirim dari Google Sheets atau tempel link dan klik Run.</span>
         </div>
 
         <div id="mapping-section" class="hidden">
@@ -80,6 +81,19 @@
   </div>
 
   <script>
+    // Ambil data terbaru dari RAM server (misal setelah user klik Sync di Google Sheets)
+    async function fetchLatestData() {
+      try {
+        const res = await fetch('/api/latest-data');
+        const data = await res.json();
+        if (data && data.records && data.records.length > 0) {
+          renderResult(data);
+        }
+      } catch (err) {
+        console.error("Gagal mengambil data RAM:", err);
+      }
+    }
+
     async function pullGoogleSheets() {
       const urlInput = document.getElementById('input-sheet-url').value.trim();
       if (!urlInput) {
@@ -197,6 +211,9 @@
       link.setAttribute("download", "data_gabungan.xls");
       link.click();
     }
+
+    // Cek otomatis apakah ada data di RAM saat pertama buka
+    fetchLatestData();
   </script>
 </body>
 </html>
