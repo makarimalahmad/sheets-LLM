@@ -14,12 +14,11 @@
       </div>
       <div class="flex gap-2">
         <a href="/docs" target="_blank" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded text-sm font-medium">Dokumentasi API</a>
-        <button onclick="resetData()" class="px-4 py-2 bg-slate-100 hover:bg-rose-100 hover:text-rose-700 border border-slate-300 rounded text-sm font-medium">Reset Tampilan</button>
       </div>
     </header>
 
     <!-- Kartu Ringkasan -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
       <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
         <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Total Data Masuk</p>
         <h3 id="stat-total" class="text-2xl font-bold text-slate-900">0</h3>
@@ -28,10 +27,6 @@
         <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Harga EUP Tertinggi</p>
         <h3 id="stat-max-eup" class="text-2xl font-bold text-slate-900">0</h3>
         <p id="stat-max-eup-sheet" class="text-xs text-slate-400 mt-1">-</p>
-      </div>
-      <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
-        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Rata-rata Margin</p>
-        <h3 id="stat-avg-margin" class="text-2xl font-bold text-slate-900">0</h3>
       </div>
     </div>
 
@@ -126,18 +121,14 @@
       const canonicals = data.canonical_fields || [];
 
       if (records.length === 0) {
-        resetData();
         return;
       }
 
       // Hitung statistik ringkasan
       let maxEup = 0;
       let maxEupSheet = '-';
-      let totalMargin = 0;
-      let marginCount = 0;
 
       const eupKey = canonicals.find(k => k === 'end_user_price_incl_vat' || (k.includes('eup') && k.includes('incl')) || k.includes('eup'));
-      const marginKey = canonicals.find(k => k === 'margin');
 
       records.forEach(r => {
         if (eupKey && typeof r[eupKey] === 'number') {
@@ -146,16 +137,11 @@
             maxEupSheet = r._source_sheet || '-';
           }
         }
-        if (marginKey && typeof r[marginKey] === 'number') {
-          totalMargin += r[marginKey];
-          marginCount++;
-        }
       });
 
       document.getElementById('stat-total').innerText = records.length;
       document.getElementById('stat-max-eup').innerText = maxEup > 0 ? maxEup.toLocaleString('id-ID') : '0';
       document.getElementById('stat-max-eup-sheet').innerText = maxEup > 0 ? 'Sumber: ' + maxEupSheet : '-';
-      document.getElementById('stat-avg-margin').innerText = marginCount > 0 ? Math.round(totalMargin / marginCount).toLocaleString('id-ID') : '0';
 
       // 1. Render Tag Kolom Standar
       const tagsContainer = document.getElementById('canonical-tags');
@@ -189,20 +175,6 @@
       `).join('');
 
       document.getElementById('btn-download-excel').classList.remove('hidden');
-    }
-
-    // Reset layar
-    function resetData() {
-      document.getElementById('stat-total').innerText = '0';
-      document.getElementById('stat-max-eup').innerText = '0';
-      document.getElementById('stat-max-eup-sheet').innerText = '-';
-      document.getElementById('stat-avg-margin').innerText = '0';
-
-      document.getElementById('consolidated-table-head').innerHTML = '';
-      document.getElementById('consolidated-table-body').innerHTML = '<tr><td class="p-4 text-center text-slate-400">Belum ada data ditampilkan.</td></tr>';
-      document.getElementById('canonical-tags').innerHTML = '<span class="text-xs text-slate-400">Belum ada data. Silakan tempel link dan klik Run.</span>';
-      document.getElementById('mapping-section').classList.add('hidden');
-      document.getElementById('btn-download-excel').classList.add('hidden');
     }
 
     // Export langsung ke file Excel (.xls)
