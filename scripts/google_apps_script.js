@@ -1,5 +1,3 @@
-// Buka Google Sheets -> Menu Ekstensi -> Apps Script
-
 // Menu tombol otomatis di Google Sheets
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
