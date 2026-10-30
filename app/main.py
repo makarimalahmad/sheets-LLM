@@ -1,13 +1,18 @@
 import os
 import re
+import csv
+import io
 import uuid
+import httpx
 from typing import Any, Dict, List
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from app.models import (
+    SingleSheetPayload,
     MultiSheetConsolidateRequest,
+    PullGoogleSheetsRequest,
     ConsolidatedDataset
 )
 from app.mapper import harmonize_sheets_schema
@@ -128,6 +133,49 @@ def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
         sheet_mappings=sheet_mappings,
         records=all_consolidated_records
     )
+
+# Tarik data langsung dari link Google Sheets tanpa Google Apps Script
+@app.post("/api/pull-google-sheets", response_model=ConsolidatedDataset)
+async def pull_google_sheets(req: PullGoogleSheetsRequest):
+    raw_url = req.sheet_url.strip()
+    if "/d/" not in raw_url:
+        raise HTTPException(status_code=400, detail="Link Google Sheets tidak valid. Harus mengandung /d/...")
+
+    try:
+        sheet_id = raw_url.split("/d/")[1].split("/")[0]
+    except Exception:
+        raise HTTPException(status_code=400, detail="Gagal mengambil ID dari link Google Sheets")
+
+    # Daftar tab yang akan dicoba tarik
+    target_tabs = req.tab_names or ["Sheet1", "Sheet2", "Sheet3", "Sheet4", "Sheet5"]
+    sheets_payload: List[SingleSheetPayload] = []
+
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+        for tab in target_tabs:
+            export_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={tab}"
+            try:
+                res = await client.get(export_url)
+                if res.status_code == 200 and res.text.strip():
+                    csv_text = res.text.strip()
+                    # Cek apakah response berupa HTML error dari Google login
+                    if "<html" in csv_text.lower():
+                        continue
+                    reader = list(csv.reader(io.StringIO(csv_text)))
+                    if len(reader) >= 2:
+                        headers = [str(col).strip() for col in reader[0]]
+                        rows = reader[1:]
+                        sheets_payload.append(SingleSheetPayload(sheet_name=tab, headers=headers, rows=rows))
+            except Exception:
+                continue
+
+    if not sheets_payload:
+        raise HTTPException(
+            status_code=400,
+            detail="Gagal membaca data dari link. Pastikan akses Google Sheets diatur ke 'Siapa saja yang memiliki link dapat melihat'."
+        )
+
+    # Proses langsung dengan fungsi konsolidasi AI
+    return consolidate_multi_sheets(MultiSheetConsolidateRequest(sheets=sheets_payload))
 
 # Ambil riwayat data gabungan dari database
 @app.get("/api/consolidated-records")

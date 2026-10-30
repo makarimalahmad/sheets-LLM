@@ -36,12 +36,24 @@
       </div>
     </div>
 
+    <!-- Kotak Tarik Data dari Link Google Sheets -->
+    <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200 mb-6">
+      <h2 class="text-sm font-bold text-slate-900 mb-1">Tarik Langsung dari Google Sheets</h2>
+      <p class="text-xs text-slate-500 mb-3">Tempel link Google Sheets Anda di bawah ini untuk menggabungkan semua tab secara otomatis tanpa script tambahan.</p>
+      <div class="flex flex-col sm:flex-row gap-2">
+        <input id="input-sheet-url" type="text" placeholder="https://docs.google.com/spreadsheets/d/..." class="w-full text-xs p-2.5 border rounded border-slate-300 font-mono focus:outline-none focus:border-blue-500">
+        <button id="btn-pull" onclick="pullGoogleSheets()" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold whitespace-nowrap">
+          Tarik & Gabungkan Data
+        </button>
+      </div>
+    </div>
+
     <!-- Hasil Penyelarasan & Tabel Data -->
     <div id="multi-result-container" class="space-y-6">
       <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
         <h3 class="text-md font-bold text-slate-900 mb-2">1. Nama Kolom Standar yang Dibuat AI</h3>
         <div id="canonical-tags" class="flex flex-wrap gap-2 mb-4">
-          <span class="text-xs text-slate-400">Belum ada data. Silakan sinkronkan melalui Google Sheets.</span>
+          <span class="text-xs text-slate-400">Belum ada data. Silakan sinkronkan melalui link atau Google Sheets.</span>
         </div>
 
         <div id="mapping-section" class="hidden">
@@ -53,9 +65,14 @@
       </div>
 
       <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
-        <h3 class="text-md font-bold text-slate-900 mb-3">3. Tabel Data Gabungan</h3>
+        <div class="flex justify-between items-center mb-3">
+          <h3 class="text-md font-bold text-slate-900">3. Tabel Data Gabungan</h3>
+          <button id="btn-download" onclick="downloadCSV()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold hidden">
+            Download CSV
+          </button>
+        </div>
         <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs border-collapse">
+          <table id="table-data" class="w-full text-left text-xs border-collapse">
             <thead id="consolidated-table-head" class="bg-slate-100 border-b border-slate-200 text-slate-700 font-semibold"></thead>
             <tbody id="consolidated-table-body" class="divide-y divide-slate-100">
               <tr>
@@ -69,6 +86,39 @@
   </div>
 
   <script>
+    async function pullGoogleSheets() {
+      const urlInput = document.getElementById('input-sheet-url').value.trim();
+      if (!urlInput) {
+        alert("Silakan tempel link Google Sheets terlebih dahulu.");
+        return;
+      }
+
+      const btn = document.getElementById('btn-pull');
+      btn.disabled = true;
+      btn.innerText = "Sedang Menarik & Memproses AI...";
+
+      try {
+        const res = await fetch('/api/pull-google-sheets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sheet_url: urlInput })
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || "Gagal menarik data");
+        }
+
+        await refreshData();
+        alert("Berhasil menarik dan menggabungkan data dari Google Sheets!");
+      } catch (err) {
+        alert("Error: " + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "Tarik & Gabungkan Data";
+      }
+    }
+
     async function refreshData() {
       try {
         const res = await fetch('/api/consolidated-records');
@@ -81,7 +131,6 @@
           : (records.length > 0 ? Object.keys(records[0]).filter(k => !k.startsWith('_')) : []);
 
         if (records.length > 0) {
-          // Hitung statistik
           let maxEup = 0;
           let maxEupSheet = '-';
           let totalMargin = 0;
@@ -135,6 +184,8 @@
           } else {
             mappingBox.classList.add('hidden');
           }
+
+          document.getElementById('btn-download').classList.remove('hidden');
         } else {
           document.getElementById('stat-total').innerText = '0';
           document.getElementById('stat-max-eup').innerText = '0';
@@ -143,12 +194,34 @@
 
           document.getElementById('consolidated-table-head').innerHTML = '';
           document.getElementById('consolidated-table-body').innerHTML = '<tr><td class="p-4 text-center text-slate-400">Belum ada data tersimpan.</td></tr>';
-          document.getElementById('canonical-tags').innerHTML = '<span class="text-xs text-slate-400">Belum ada data. Silakan sinkronkan melalui Google Sheets.</span>';
+          document.getElementById('canonical-tags').innerHTML = '<span class="text-xs text-slate-400">Belum ada data. Silakan sinkronkan melalui link atau Google Sheets.</span>';
           document.getElementById('mapping-section').classList.add('hidden');
+          document.getElementById('btn-download').classList.add('hidden');
         }
       } catch (err) {
         console.error("Gagal refresh data:", err);
       }
+    }
+
+    function downloadCSV() {
+      const table = document.getElementById("table-data");
+      const rows = Array.from(table.querySelectorAll("tr"));
+      if (rows.length <= 1) {
+        alert("Belum ada data untuk diunduh.");
+        return;
+      }
+
+      const csvContent = rows.map(row => {
+        const cols = Array.from(row.querySelectorAll("th, td"));
+        return cols.map(col => `"${col.innerText.replace(/"/g, '""').trim()}"`).join(",");
+      }).join("\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", "data_gabungan_sheets.csv");
+      link.click();
     }
 
     async function clearDataHistory() {

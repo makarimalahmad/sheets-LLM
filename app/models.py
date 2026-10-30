@@ -9,6 +9,10 @@ class SingleSheetPayload(BaseModel):
 class MultiSheetConsolidateRequest(BaseModel):
     sheets: List[SingleSheetPayload]
 
+class PullGoogleSheetsRequest(BaseModel):
+    sheet_url: str = Field(description="URL Google Sheets publik/viewable")
+    tab_names: Optional[List[str]] = Field(default=None, description="Daftar tab yang ingin ditarik (opsional)")
+
 class ConsolidatedDataset(BaseModel):
     status: str
     total_sheets: int
