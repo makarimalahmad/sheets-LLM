@@ -14,8 +14,7 @@
       </div>
       <div class="flex gap-2">
         <a href="/docs" target="_blank" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded text-sm font-medium">Dokumentasi API</a>
-        <button onclick="clearDataHistory()" class="px-4 py-2 bg-slate-100 hover:bg-rose-100 hover:text-rose-700 border border-slate-300 rounded text-sm font-medium">Bersihkan Riwayat</button>
-        <button onclick="refreshData()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium">Perbarui Data</button>
+        <button onclick="resetData()" class="px-4 py-2 bg-slate-100 hover:bg-rose-100 hover:text-rose-700 border border-slate-300 rounded text-sm font-medium">Reset Tampilan</button>
       </div>
     </header>
 
@@ -53,7 +52,7 @@
       <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
         <h3 class="text-md font-bold text-slate-900 mb-2">1. Nama Kolom Standar yang Dibuat AI</h3>
         <div id="canonical-tags" class="flex flex-wrap gap-2 mb-4">
-          <span class="text-xs text-slate-400">Belum ada data. Silakan sinkronkan melalui link atau Google Sheets.</span>
+          <span class="text-xs text-slate-400">Belum ada data. Silakan tempel link dan klik Run.</span>
         </div>
 
         <div id="mapping-section" class="hidden">
@@ -76,7 +75,7 @@
             <thead id="consolidated-table-head" class="bg-slate-100 border-b border-slate-200 text-slate-700 font-semibold"></thead>
             <tbody id="consolidated-table-body" class="divide-y divide-slate-100">
               <tr>
-                <td class="p-4 text-center text-slate-400">Belum ada data tersimpan.</td>
+                <td class="p-4 text-center text-slate-400">Belum ada data ditampilkan.</td>
               </tr>
             </tbody>
           </table>
@@ -109,7 +108,8 @@
           throw new Error(err.detail || "Gagal menarik data");
         }
 
-        await refreshData();
+        const data = await res.json();
+        renderResult(data);
         alert("Data berhasil diproses.");
       } catch (err) {
         alert("Error: " + err.message);
@@ -119,91 +119,93 @@
       }
     }
 
-    async function refreshData() {
-      try {
-        const res = await fetch('/api/consolidated-records');
-        const consolidated = await res.json();
+    // Tampilkan hasil penggabungan langsung ke layar
+    function renderResult(data) {
+      const records = data.records || [];
+      const mappings = data.sheet_mappings || {};
+      const canonicals = data.canonical_fields || [];
 
-        const records = Array.isArray(consolidated) ? consolidated : (consolidated.records || []);
-        const mappings = consolidated.sheet_mappings || null;
-        const canonicals = (consolidated.canonical_fields && consolidated.canonical_fields.length > 0)
-          ? consolidated.canonical_fields
-          : (records.length > 0 ? Object.keys(records[0]).filter(k => !k.startsWith('_')) : []);
-
-        if (records.length > 0) {
-          let maxEup = 0;
-          let maxEupSheet = '-';
-          let totalMargin = 0;
-          let marginCount = 0;
-
-          const eupKey = canonicals.find(k => k === 'end_user_price_incl_vat' || (k.includes('eup') && k.includes('incl')) || k.includes('eup'));
-          const marginKey = canonicals.find(k => k === 'margin');
-
-          records.forEach(r => {
-            if (eupKey && typeof r[eupKey] === 'number') {
-              if (r[eupKey] > maxEup) {
-                maxEup = r[eupKey];
-                maxEupSheet = r._source_sheet || '-';
-              }
-            }
-            if (marginKey && typeof r[marginKey] === 'number') {
-              totalMargin += r[marginKey];
-              marginCount++;
-            }
-          });
-
-          document.getElementById('stat-total').innerText = records.length;
-          document.getElementById('stat-max-eup').innerText = maxEup > 0 ? maxEup.toLocaleString('id-ID') : '0';
-          document.getElementById('stat-max-eup-sheet').innerText = maxEup > 0 ? 'Sumber: ' + maxEupSheet : '-';
-          document.getElementById('stat-avg-margin').innerText = marginCount > 0 ? Math.round(totalMargin / marginCount).toLocaleString('id-ID') : '0';
-
-          const thead = document.getElementById('consolidated-table-head');
-          thead.innerHTML = `<tr><th class="p-2.5">Sumber</th>${canonicals.map(c => `<th class="p-2.5">${c}</th>`).join('')}</tr>`;
-
-          const cbody = document.getElementById('consolidated-table-body');
-          cbody.innerHTML = records.map(r => `
-            <tr class="hover:bg-slate-50">
-              <td class="p-2.5 font-bold text-slate-800">${r._source_sheet || '-'}</td>
-              ${canonicals.map(f => {
-                const val = r[f];
-                const display = (typeof val === 'number') ? val.toLocaleString('id-ID') : (val !== null ? val : '-');
-                return `<td class="p-2.5 font-mono text-slate-700">${display}</td>`;
-              }).join('')}
-            </tr>
-          `).join('');
-
-          const tagsContainer = document.getElementById('canonical-tags');
-          tagsContainer.innerHTML = canonicals.map(f => `
-            <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded font-mono text-xs font-semibold">${f}</span>
-          `).join('');
-
-          const mappingBox = document.getElementById('mapping-section');
-          if (mappings && Object.keys(mappings).length > 0) {
-            document.getElementById('mapping-matrix').innerText = JSON.stringify(mappings, null, 2);
-            mappingBox.classList.remove('hidden');
-          } else {
-            mappingBox.classList.add('hidden');
-          }
-
-          document.getElementById('btn-download-excel').classList.remove('hidden');
-        } else {
-          document.getElementById('stat-total').innerText = '0';
-          document.getElementById('stat-max-eup').innerText = '0';
-          document.getElementById('stat-max-eup-sheet').innerText = '-';
-          document.getElementById('stat-avg-margin').innerText = '0';
-
-          document.getElementById('consolidated-table-head').innerHTML = '';
-          document.getElementById('consolidated-table-body').innerHTML = '<tr><td class="p-4 text-center text-slate-400">Belum ada data tersimpan.</td></tr>';
-          document.getElementById('canonical-tags').innerHTML = '<span class="text-xs text-slate-400">Belum ada data. Silakan sinkronkan melalui link atau Google Sheets.</span>';
-          document.getElementById('mapping-section').classList.add('hidden');
-          document.getElementById('btn-download-excel').classList.add('hidden');
-        }
-      } catch (err) {
-        console.error("Gagal refresh data:", err);
+      if (records.length === 0) {
+        resetData();
+        return;
       }
+
+      // Hitung statistik ringkasan
+      let maxEup = 0;
+      let maxEupSheet = '-';
+      let totalMargin = 0;
+      let marginCount = 0;
+
+      const eupKey = canonicals.find(k => k === 'end_user_price_incl_vat' || (k.includes('eup') && k.includes('incl')) || k.includes('eup'));
+      const marginKey = canonicals.find(k => k === 'margin');
+
+      records.forEach(r => {
+        if (eupKey && typeof r[eupKey] === 'number') {
+          if (r[eupKey] > maxEup) {
+            maxEup = r[eupKey];
+            maxEupSheet = r._source_sheet || '-';
+          }
+        }
+        if (marginKey && typeof r[marginKey] === 'number') {
+          totalMargin += r[marginKey];
+          marginCount++;
+        }
+      });
+
+      document.getElementById('stat-total').innerText = records.length;
+      document.getElementById('stat-max-eup').innerText = maxEup > 0 ? maxEup.toLocaleString('id-ID') : '0';
+      document.getElementById('stat-max-eup-sheet').innerText = maxEup > 0 ? 'Sumber: ' + maxEupSheet : '-';
+      document.getElementById('stat-avg-margin').innerText = marginCount > 0 ? Math.round(totalMargin / marginCount).toLocaleString('id-ID') : '0';
+
+      // 1. Render Tag Kolom Standar
+      const tagsContainer = document.getElementById('canonical-tags');
+      tagsContainer.innerHTML = canonicals.map(f => `
+        <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded font-mono text-xs font-semibold">${f}</span>
+      `).join('');
+
+      // 2. Render Pemetaan Kolom Tiap Sheet
+      const mappingBox = document.getElementById('mapping-section');
+      if (mappings && Object.keys(mappings).length > 0) {
+        document.getElementById('mapping-matrix').innerText = JSON.stringify(mappings, null, 2);
+        mappingBox.classList.remove('hidden');
+      } else {
+        mappingBox.classList.add('hidden');
+      }
+
+      // 3. Render Tabel Gabungan
+      const thead = document.getElementById('consolidated-table-head');
+      thead.innerHTML = `<tr><th class="p-2.5">Sumber</th>${canonicals.map(c => `<th class="p-2.5">${c}</th>`).join('')}</tr>`;
+
+      const cbody = document.getElementById('consolidated-table-body');
+      cbody.innerHTML = records.map(r => `
+        <tr class="hover:bg-slate-50">
+          <td class="p-2.5 font-bold text-slate-800">${r._source_sheet || '-'}</td>
+          ${canonicals.map(f => {
+            const val = r[f];
+            const display = (typeof val === 'number') ? val.toLocaleString('id-ID') : (val !== null ? val : '-');
+            return `<td class="p-2.5 font-mono text-slate-700">${display}</td>`;
+          }).join('')}
+        </tr>
+      `).join('');
+
+      document.getElementById('btn-download-excel').classList.remove('hidden');
     }
 
-    // Export langsung ke file Excel (.xls) rapi dengan header dan styling tabel
+    // Reset layar
+    function resetData() {
+      document.getElementById('stat-total').innerText = '0';
+      document.getElementById('stat-max-eup').innerText = '0';
+      document.getElementById('stat-max-eup-sheet').innerText = '-';
+      document.getElementById('stat-avg-margin').innerText = '0';
+
+      document.getElementById('consolidated-table-head').innerHTML = '';
+      document.getElementById('consolidated-table-body').innerHTML = '<tr><td class="p-4 text-center text-slate-400">Belum ada data ditampilkan.</td></tr>';
+      document.getElementById('canonical-tags').innerHTML = '<span class="text-xs text-slate-400">Belum ada data. Silakan tempel link dan klik Run.</span>';
+      document.getElementById('mapping-section').classList.add('hidden');
+      document.getElementById('btn-download-excel').classList.add('hidden');
+    }
+
+    // Export langsung ke file Excel (.xls)
     function downloadExcel() {
       const table = document.getElementById("table-data");
       const rows = Array.from(table.querySelectorAll("tr"));
@@ -223,20 +225,6 @@
       link.setAttribute("download", "data_gabungan.xls");
       link.click();
     }
-
-    async function clearDataHistory() {
-      if (!confirm("Bersihkan semua riwayat data lama di database?")) return;
-      try {
-        await fetch('/api/clear-data', { method: 'DELETE' });
-        await refreshData();
-        alert("Riwayat data lama berhasil dibersihkan.");
-      } catch (err) {
-        alert("Gagal membersihkan data: " + err);
-      }
-    }
-
-    // Inisialisasi awal
-    refreshData();
   </script>
 </body>
 </html>

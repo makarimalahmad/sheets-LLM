@@ -2,7 +2,6 @@ import os
 import re
 import csv
 import io
-import uuid
 import httpx
 from typing import Any, Dict, List
 from fastapi import FastAPI, HTTPException
@@ -16,15 +15,10 @@ from app.models import (
     ConsolidatedDataset
 )
 from app.mapper import harmonize_sheets_schema
-from app.database import (
-    save_consolidated_records,
-    get_latest_consolidated_records,
-    clear_all_records
-)
 
 app = FastAPI(
     title="Sheets LLM Backend API",
-    description="Otomatisasi standarisasi nama kolom dan penggabungan data multi-sheet spreadsheet.",
+    description="Sistem AI standarisasi nama kolom dan penggabungan data multi-sheet spreadsheet.",
     version="2.0.0"
 )
 
@@ -60,7 +54,7 @@ def parse_cell_value(val: Any) -> Any:
             return s
     return s
 
-# Tampilkan dashboard HTML
+# Tampilkan halaman dashboard HTML
 @app.get("/")
 def root():
     index_file = os.path.join("dashboard", "index.html")
@@ -77,9 +71,9 @@ def view_dashboard():
     index_file = os.path.join("dashboard", "index.html")
     if os.path.exists(index_file):
         return FileResponse(index_file)
-    raise HTTPException(status_code=404, detail="Dashboard file not found")
+    raise HTTPException(status_code=404, detail="File dashboard tidak ditemukan")
 
-# Gabungkan data dari banyak sheet menjadi 1 tabel standar
+# Gabungkan data dari banyak sheet menjadi 1 tabel standar via AI
 @app.post("/api/consolidate", response_model=ConsolidatedDataset)
 def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
     if not payload.sheets:
@@ -90,13 +84,12 @@ def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
     try:
         harmonized = harmonize_sheets_schema(sheets_data)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal memproses data: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Gagal memproses AI: {str(e)}")
 
     canonical_fields = harmonized.get("canonical_fields", [])
     sheet_mappings = harmonized.get("sheet_mappings", {})
 
     all_consolidated_records: List[Dict[str, Any]] = []
-    batch_id = f"batch_{uuid.uuid4().hex[:8]}"
 
     for sheet in payload.sheets:
         s_name = sheet.sheet_name
@@ -123,8 +116,7 @@ def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
 
             all_consolidated_records.append(record)
 
-    save_consolidated_records(batch_id, all_consolidated_records, canonical_fields, sheet_mappings)
-
+    # Langsung kembalikan hasil ke frontend tanpa database
     return ConsolidatedDataset(
         status="success",
         total_sheets=len(payload.sheets),
@@ -134,7 +126,7 @@ def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
         records=all_consolidated_records
     )
 
-# Tarik data langsung dari link Google Sheets tanpa Google Apps Script
+# Tarik data dari link Google Sheets dan gabungkan langsung via AI
 @app.post("/api/pull-google-sheets", response_model=ConsolidatedDataset)
 async def pull_google_sheets(req: PullGoogleSheetsRequest):
     raw_url = req.sheet_url.strip()
@@ -146,7 +138,7 @@ async def pull_google_sheets(req: PullGoogleSheetsRequest):
     except Exception:
         raise HTTPException(status_code=400, detail="Gagal mengambil ID dari link Google Sheets")
 
-    # Daftar tab yang akan dicoba tarik
+    # Daftar tab yang akan ditarik
     target_tabs = req.tab_names or ["Sheet1", "Sheet2", "Sheet3", "Sheet4", "Sheet5"]
     sheets_payload: List[SingleSheetPayload] = []
 
@@ -157,7 +149,6 @@ async def pull_google_sheets(req: PullGoogleSheetsRequest):
                 res = await client.get(export_url)
                 if res.status_code == 200 and res.text.strip():
                     csv_text = res.text.strip()
-                    # Cek apakah response berupa HTML error dari Google login
                     if "<html" in csv_text.lower():
                         continue
                     reader = list(csv.reader(io.StringIO(csv_text)))
@@ -174,16 +165,5 @@ async def pull_google_sheets(req: PullGoogleSheetsRequest):
             detail="Gagal membaca data dari link. Pastikan akses Google Sheets diatur ke 'Siapa saja yang memiliki link dapat melihat'."
         )
 
-    # Proses langsung dengan fungsi konsolidasi AI
+    # Kirim data ke AI dan langsung kembalikan hasilnya
     return consolidate_multi_sheets(MultiSheetConsolidateRequest(sheets=sheets_payload))
-
-# Ambil riwayat data gabungan dari database
-@app.get("/api/consolidated-records")
-def list_consolidated_records(limit: int = 100):
-    return get_latest_consolidated_records(limit=limit)
-
-# Hapus semua riwayat data di database
-@app.delete("/api/clear-data")
-def clear_data():
-    clear_all_records()
-    return {"status": "success", "message": "Riwayat data berhasil dibersihkan"}
