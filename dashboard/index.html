@@ -38,12 +38,12 @@
 
     <!-- Kotak Tarik Data dari Link Google Sheets -->
     <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200 mb-6">
-      <h2 class="text-sm font-bold text-slate-900 mb-1">Tarik Langsung dari Google Sheets</h2>
-      <p class="text-xs text-slate-500 mb-3">Tempel link Google Sheets Anda di bawah ini untuk menggabungkan semua tab secara otomatis tanpa script tambahan.</p>
+      <h2 class="text-sm font-bold text-slate-900 mb-1">Sync AI</h2>
+      <p class="text-xs text-slate-500 mb-3">Tempel link Google Sheets</p>
       <div class="flex flex-col sm:flex-row gap-2">
         <input id="input-sheet-url" type="text" placeholder="https://docs.google.com/spreadsheets/d/..." class="w-full text-xs p-2.5 border rounded border-slate-300 font-mono focus:outline-none focus:border-blue-500">
-        <button id="btn-pull" onclick="pullGoogleSheets()" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold whitespace-nowrap">
-          Tarik & Gabungkan Data
+        <button id="btn-pull" onclick="pullGoogleSheets()" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold whitespace-nowrap">
+          Run
         </button>
       </div>
     </div>
@@ -67,14 +67,9 @@
       <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
         <div class="flex justify-between items-center mb-3">
           <h3 class="text-md font-bold text-slate-900">3. Tabel Data Gabungan</h3>
-          <div class="flex gap-2">
-            <button id="btn-download-excel" onclick="downloadExcel()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold hidden">
-              Export Excel (.xls)
-            </button>
-            <button id="btn-download-csv" onclick="downloadCSV()" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-xs font-semibold hidden">
-              CSV
-            </button>
-          </div>
+          <button id="btn-download-excel" onclick="downloadExcel()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold hidden">
+            Export Excel (.xls)
+          </button>
         </div>
         <div class="overflow-x-auto">
           <table id="table-data" class="w-full text-left text-xs border-collapse">
@@ -191,7 +186,6 @@
           }
 
           document.getElementById('btn-download-excel').classList.remove('hidden');
-          document.getElementById('btn-download-csv').classList.remove('hidden');
         } else {
           document.getElementById('stat-total').innerText = '0';
           document.getElementById('stat-max-eup').innerText = '0';
@@ -203,7 +197,6 @@
           document.getElementById('canonical-tags').innerHTML = '<span class="text-xs text-slate-400">Belum ada data. Silakan sinkronkan melalui link atau Google Sheets.</span>';
           document.getElementById('mapping-section').classList.add('hidden');
           document.getElementById('btn-download-excel').classList.add('hidden');
-          document.getElementById('btn-download-csv').classList.add('hidden');
         }
       } catch (err) {
         console.error("Gagal refresh data:", err);
@@ -228,27 +221,6 @@
       const link = document.createElement("a");
       link.setAttribute("href", url);
       link.setAttribute("download", "data_gabungan.xls");
-      link.click();
-    }
-
-    function downloadCSV() {
-      const table = document.getElementById("table-data");
-      const rows = Array.from(table.querySelectorAll("tr"));
-      if (rows.length <= 1) {
-        alert("Belum ada data untuk diunduh.");
-        return;
-      }
-
-      const csvContent = rows.map(row => {
-        const cols = Array.from(row.querySelectorAll("th, td"));
-        return cols.map(col => `"${col.innerText.replace(/"/g, '""').trim()}"`).join(",");
-      }).join("\n");
-
-      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", "data_gabungan_sheets.csv");
       link.click();
     }
 
