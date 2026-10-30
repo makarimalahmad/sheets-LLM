@@ -95,7 +95,7 @@
 
       const btn = document.getElementById('btn-pull');
       btn.disabled = true;
-      btn.innerText = "Sedang Menarik & Memproses AI...";
+      btn.innerText = "Sedang Memproses...";
 
       try {
         const res = await fetch('/api/pull-google-sheets', {
@@ -110,12 +110,11 @@
         }
 
         await refreshData();
-        alert("Berhasil menarik dan menggabungkan data dari Google Sheets!");
       } catch (err) {
         alert("Error: " + err.message);
       } finally {
         btn.disabled = false;
-        btn.innerText = "Tarik & Gabungkan Data";
+        btn.innerText = "Run";
       }
     }
 
