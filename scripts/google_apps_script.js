@@ -40,7 +40,7 @@ function sendAllSheetsToBackend() {
   };
 
   // Masukkan URL backend VPS Anda
-  var backendUrl = "http://172.232.224.220/api/consolidate";
+  var backendUrl = "http://108.136.138.174/api/consolidate";
 
   var options = {
     method: "post",
