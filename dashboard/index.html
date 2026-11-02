@@ -142,7 +142,9 @@
       let maxEup = 0;
       let maxEupSheet = '-';
 
-      const eupKey = canonicals.find(k => k === 'end_user_price_incl_vat' || (k.includes('eup') && k.includes('incl')) || k.includes('eup'));
+      const eupKey = canonicals.find(k => 
+        (k.includes('vat') || k.includes('tax')) && (k.includes('incl') || k.includes('in_') || k.includes('with') || !k.includes('ex'))
+      ) || canonicals.find(k => k.includes('eup') || k.includes('price'));
 
       records.forEach(r => {
         if (eupKey && typeof r[eupKey] === 'number') {
