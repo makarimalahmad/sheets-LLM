@@ -50,6 +50,7 @@ Tugas kamu:
 2. Satukan kolom dari berbagai sheet yang memiliki makna sama ke dalam SATU nama kolom standar yang deskriptif dan konsisten (ditulis dalam format snake_case bahasa Inggris).
 3. ATURAN KETAT - 1-ke-1 per Sheet: Dua kolom yang berbeda dalam SATU sheet yang sama TIDAK BOLEH disamakan ke satu nama standar yang sama. Jika ada sheet yang memiliki dua kolom terpisah, perlakukan sebagai dua atribut terpisah dan berikan masing-masing nama standar yang berbeda.
 4. Buat pemetaan dari setiap nama kolom asli ke nama kolom standar yang sesuai.
+5. ATURAN PENAMAAN KHUSUS: Gunakan nama 'margin' untuk kolom laba/keuntungan.
 
 Data Sheet:
 {json.dumps(simplified_sheets, indent=2)}
