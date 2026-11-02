@@ -30,7 +30,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Simpan data sementara di memori RAM server (100% tanpa file database)
+# Simpan data sementara di memori RAM server
 LATEST_MEMORY_DATA: Dict[str, Any] = {}
 
 # Ubah teks angka atau mata uang menjadi float
@@ -39,23 +39,23 @@ def parse_cell_value(val: Any) -> Any:
         return None
     if isinstance(val, (int, float)):
         return float(val)
-    s = str(val).strip()
-    if not s:
+    text_value = str(val).strip()
+    if not text_value:
         return None
-    clean_s = re.sub(r"[^\d.,\-]", "", s)
-    if clean_s and any(c.isdigit() for c in clean_s):
-        if "," in clean_s and "." in clean_s:
-            if clean_s.rfind(",") > clean_s.rfind("."):
-                clean_s = clean_s.replace(".", "").replace(",", ".")
+    cleaned_text = re.sub(r"[^\d.,\-]", "", text_value)
+    if cleaned_text and any(c.isdigit() for c in cleaned_text):
+        if "," in cleaned_text and "." in cleaned_text:
+            if cleaned_text.rfind(",") > cleaned_text.rfind("."):
+                cleaned_text = cleaned_text.replace(".", "").replace(",", ".")
             else:
-                clean_s = clean_s.replace(",", "")
-        elif "," in clean_s:
-            clean_s = clean_s.replace(",", ".")
+                cleaned_text = cleaned_text.replace(",", "")
+        elif "," in cleaned_text:
+            cleaned_text = cleaned_text.replace(",", ".")
         try:
-            return float(clean_s)
+            return float(cleaned_text)
         except ValueError:
-            return s
-    return s
+            return text_value
+    return text_value
 
 # Tampilkan halaman dashboard HTML
 @app.get("/")
@@ -97,27 +97,27 @@ def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
     all_consolidated_records: List[Dict[str, Any]] = []
 
     for sheet in payload.sheets:
-        s_name = sheet.sheet_name
+        sheet_name = sheet.sheet_name
         headers = sheet.headers
         rows = sheet.rows
 
-        s_mapping = sheet_mappings.get(s_name, {})
+        sheet_mapping = sheet_mappings.get(sheet_name, {})
         index_to_canonical: Dict[int, str] = {}
-        for idx, h in enumerate(headers):
-            canonical = s_mapping.get(h)
+        for idx, header_name in enumerate(headers):
+            canonical = sheet_mapping.get(header_name)
             if canonical:
                 index_to_canonical[idx] = canonical
 
         for row in rows:
             record: Dict[str, Any] = {
-                "_source_sheet": s_name
+                "_source_sheet": sheet_name
             }
-            for c_field in canonical_fields:
-                record[c_field] = None
+            for col_field in canonical_fields:
+                record[col_field] = None
 
-            for idx, c_field in index_to_canonical.items():
+            for idx, col_field in index_to_canonical.items():
                 if idx < len(row):
-                    record[c_field] = parse_cell_value(row[idx])
+                    record[col_field] = parse_cell_value(row[idx])
 
             all_consolidated_records.append(record)
 

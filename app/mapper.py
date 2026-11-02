@@ -34,11 +34,11 @@ def harmonize_sheets_schema(sheets: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     # Ambil nama kolom dan 2 contoh baris isi data untuk dianalisis LLM
     simplified_sheets = []
-    for s in sheets:
+    for sheet_item in sheets:
         simplified_sheets.append({
-            "sheet_name": s.get("sheet_name", "Sheet"),
-            "headers": s.get("headers", []),
-            "sample_rows": s.get("rows", [])[:2]
+            "sheet_name": sheet_item.get("sheet_name", "Sheet"),
+            "headers": sheet_item.get("headers", []),
+            "sample_rows": sheet_item.get("rows", [])[:2]
         })
 
     prompt = f"""Kamu adalah sistem AI untuk standarisasi nama kolom data spreadsheet.
