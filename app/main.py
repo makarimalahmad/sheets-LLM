@@ -42,19 +42,42 @@ def parse_cell_value(val: Any) -> Any:
     text_value = str(val).strip()
     if not text_value:
         return None
+
+    # Hapus awalan mata uang seperti Rp, Rp., IDR
+    text_value = re.sub(r"^(rp\.?|idr)\s*", "", text_value, flags=re.IGNORECASE).strip()
+
+    # Saring karakter angka, koma, titik, dan minus
     cleaned_text = re.sub(r"[^\d.,\-]", "", text_value)
-    if cleaned_text and any(c.isdigit() for c in cleaned_text):
-        if "," in cleaned_text and "." in cleaned_text:
-            if cleaned_text.rfind(",") > cleaned_text.rfind("."):
-                cleaned_text = cleaned_text.replace(".", "").replace(",", ".")
-            else:
-                cleaned_text = cleaned_text.replace(",", "")
-        elif "," in cleaned_text:
+    if not cleaned_text or not any(c.isdigit() for c in cleaned_text):
+        return text_value
+
+    # Jika ada titik di depan (sisa Rp.), hilangkan
+    if cleaned_text.startswith("."):
+        cleaned_text = cleaned_text.lstrip(".")
+
+    # Tangani format dengan koma dan titik sekaligus (contoh: 1.500.000,00)
+    if "," in cleaned_text and "." in cleaned_text:
+        if cleaned_text.rfind(",") > cleaned_text.rfind("."):
+            cleaned_text = cleaned_text.replace(".", "").replace(",", ".")
+        else:
+            cleaned_text = cleaned_text.replace(",", "")
+    elif "." in cleaned_text:
+        # Titik sebagai pemisah ribuan (contoh: 350.000 atau 1.200.000)
+        parts = cleaned_text.split(".")
+        if len(parts) > 2 or (len(parts) == 2 and len(parts[1]) == 3 and int(parts[0]) > 0):
+            cleaned_text = cleaned_text.replace(".", "")
+    elif "," in cleaned_text:
+        # Koma sebagai pemisah ribuan atau desimal
+        parts = cleaned_text.split(",")
+        if len(parts) == 2 and len(parts[1]) == 3 and int(parts[0]) > 0:
+            cleaned_text = cleaned_text.replace(",", "")
+        else:
             cleaned_text = cleaned_text.replace(",", ".")
-        try:
-            return float(cleaned_text)
-        except ValueError:
-            return text_value
+
+    try:
+        return float(cleaned_text)
+    except ValueError:
+        return text_value
     return text_value
 
 # Tampilkan halaman dashboard HTML
