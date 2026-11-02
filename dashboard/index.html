@@ -19,15 +19,10 @@
     </header>
 
     <!-- Kartu Ringkasan -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+    <div class="mb-6">
       <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
         <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Total Data Masuk</p>
         <h3 id="stat-total" class="text-2xl font-bold text-slate-900">0</h3>
-      </div>
-      <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
-        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Harga EUP Tertinggi</p>
-        <h3 id="stat-max-eup" class="text-2xl font-bold text-slate-900">0</h3>
-        <p id="stat-max-eup-sheet" class="text-xs text-slate-400 mt-1">-</p>
       </div>
     </div>
 
@@ -138,26 +133,7 @@
         return;
       }
 
-      // Hitung statistik ringkasan
-      let maxEup = 0;
-      let maxEupSheet = '-';
-
-      const eupKey = canonicals.find(k => 
-        (k.includes('vat') || k.includes('tax')) && (k.includes('incl') || k.includes('in_') || k.includes('with') || !k.includes('ex'))
-      ) || canonicals.find(k => k.includes('eup') || k.includes('price'));
-
-      records.forEach(r => {
-        if (eupKey && typeof r[eupKey] === 'number') {
-          if (r[eupKey] > maxEup) {
-            maxEup = r[eupKey];
-            maxEupSheet = r._source_sheet || '-';
-          }
-        }
-      });
-
       document.getElementById('stat-total').innerText = records.length;
-      document.getElementById('stat-max-eup').innerText = maxEup > 0 ? maxEup.toLocaleString('id-ID') : '0';
-      document.getElementById('stat-max-eup-sheet').innerText = maxEup > 0 ? 'Sumber: ' + maxEupSheet : '-';
 
       // 1. Render Tag Kolom Standar
       const tagsContainer = document.getElementById('canonical-tags');
