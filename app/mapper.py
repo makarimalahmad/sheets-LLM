@@ -85,14 +85,3 @@ Keluarkan format HANYA objek JSON dengan struktur persis seperti ini:
         "standard_columns": standard_columns,
         "sheet_mappings": sheet_mappings
     }
-
-# Pemetaan kolom untuk 1 sheet saja
-def map_single_sheet_headers(headers: List[str], sample_rows: Optional[List[List[Any]]] = None) -> Dict[str, Optional[str]]:
-    sheet_payload = [{
-        "sheet_name": "InputSheet",
-        "headers": headers,
-        "rows": sample_rows or []
-    }]
-    harmonized = harmonize_sheets_schema(sheet_payload)
-    mapping = harmonized.get("sheet_mappings", {}).get("InputSheet", {})
-    return mapping
