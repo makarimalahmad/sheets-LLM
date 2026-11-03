@@ -137,8 +137,8 @@
 
       // 1. Render Tag Kolom Standar
       const tagsContainer = document.getElementById('canonical-tags');
-      tagsContainer.innerHTML = canonicals.map(f => `
-        <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded font-mono text-xs font-semibold">${f}</span>
+      tagsContainer.innerHTML = canonicals.map(field_name => `
+        <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded font-mono text-xs font-semibold">${field_name}</span>
       `).join('');
 
       // 2. Render Pemetaan Kolom Tiap Sheet
@@ -152,14 +152,14 @@
 
       // 3. Render Tabel Gabungan
       const thead = document.getElementById('consolidated-table-head');
-      thead.innerHTML = `<tr><th class="p-2.5">Sumber</th>${canonicals.map(c => `<th class="p-2.5">${c}</th>`).join('')}</tr>`;
+      thead.innerHTML = `<tr><th class="p-2.5">Sumber</th>${canonicals.map(col_name => `<th class="p-2.5">${col_name}</th>`).join('')}</tr>`;
 
       const cbody = document.getElementById('consolidated-table-body');
-      cbody.innerHTML = records.map(r => `
+      cbody.innerHTML = records.map(row_item => `
         <tr class="hover:bg-slate-50">
-          <td class="p-2.5 font-bold text-slate-800">${r._source_sheet || '-'}</td>
-          ${canonicals.map(f => {
-            const val = r[f];
+          <td class="p-2.5 font-bold text-slate-800">${row_item._source_sheet || '-'}</td>
+          ${canonicals.map(field_name => {
+            const val = row_item[field_name];
             const display = (typeof val === 'number') ? val.toLocaleString('id-ID') : (val !== null ? val : '-');
             return `<td class="p-2.5 font-mono text-slate-700">${display}</td>`;
           }).join('')}

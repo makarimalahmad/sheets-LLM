@@ -17,8 +17,8 @@ function sendAllSheetsToBackend() {
     var data = sheet.getDataRange().getValues();
 
     if (data.length >= 2) {
-      var headers = data[0].map(function (h) {
-        return String(h).trim();
+      var headers = data[0].map(function (header_text) {
+        return String(header_text).trim();
       });
       var rows = data.slice(1);
 
@@ -39,7 +39,7 @@ function sendAllSheetsToBackend() {
     sheets: sheetsPayload,
   };
 
-  // Masukkan URL backend VPS Anda
+  // URL VPS
   var backendUrl = "http://108.136.138.174/api/consolidate";
 
   var options = {
