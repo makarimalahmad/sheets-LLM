@@ -175,10 +175,23 @@ async def pull_google_sheets(req: PullGoogleSheetsRequest):
     except Exception:
         raise HTTPException(status_code=400, detail="Gagal mengambil ID dari link Google Sheets")
 
-    target_tabs = req.tab_names or ["Sheet1", "Sheet2", "Sheet3", "Sheet4", "Sheet5"]
     sheets_payload: List[SingleSheetPayload] = []
+    seen_sheet_contents = set()
 
     async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+        # 1. Deteksi nama-nama tab asli dari halaman Google Sheets
+        detected_tabs: List[str] = []
+        try:
+            res_page = await client.get(f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit")
+            if res_page.status_code == 200:
+                detected_tabs = re.findall(r'docs-sheet-tab-caption">([^<]+)</div>', res_page.text)
+        except Exception:
+            pass
+
+        # 2. Gunakan tab yang terdeteksi atau coba Sheet1 sampai Sheet20
+        default_fallback_tabs = [f"Sheet{i}" for i in range(1, 21)]
+        target_tabs = req.tab_names or detected_tabs or default_fallback_tabs
+
         for tab in target_tabs:
             export_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={tab}"
             try:
@@ -187,6 +200,12 @@ async def pull_google_sheets(req: PullGoogleSheetsRequest):
                     csv_text = res.text.strip()
                     if "<html" in csv_text.lower():
                         continue
+
+                    # Cegah duplikasi data jika Google fallback ke tab pertama untuk tab yang tidak ada
+                    if csv_text in seen_sheet_contents:
+                        continue
+                    seen_sheet_contents.add(csv_text)
+
                     reader = list(csv.reader(io.StringIO(csv_text)))
                     if len(reader) >= 2:
                         headers = [str(column_name).strip() for column_name in reader[0]]
