@@ -48,7 +48,7 @@ def parse_cell_value(val: Any) -> Any:
 
     # Saring karakter angka, koma, titik, dan minus
     cleaned_text = re.sub(r"[^\d.,\-]", "", text_value)
-    if not cleaned_text or not any(c.isdigit() for c in cleaned_text):
+    if not cleaned_text or not any(char.isdigit() for char in cleaned_text):
         return text_value
 
     # Jika ada titik di depan (sisa Rp.), hilangkan
@@ -107,12 +107,12 @@ def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
     if not payload.sheets:
         raise HTTPException(status_code=400, detail="Daftar sheet tidak boleh kosong")
 
-    sheets_data = [s.model_dump() for s in payload.sheets]
+    sheets_data = [sheet_item.model_dump() for sheet_item in payload.sheets]
 
     try:
         harmonized = harmonize_sheets_schema(sheets_data)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal memproses AI: {str(e)}")
+    except Exception as error_detail:
+        raise HTTPException(status_code=500, detail=f"Gagal memproses AI: {str(error_detail)}")
 
     canonical_fields = harmonized.get("canonical_fields", [])
     sheet_mappings = harmonized.get("sheet_mappings", {})
@@ -126,10 +126,10 @@ def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
 
         sheet_mapping = sheet_mappings.get(sheet_name, {})
         index_to_canonical: Dict[int, str] = {}
-        for idx, header_name in enumerate(headers):
+        for col_index, header_name in enumerate(headers):
             canonical = sheet_mapping.get(header_name)
             if canonical:
-                index_to_canonical[idx] = canonical
+                index_to_canonical[col_index] = canonical
 
         for row in rows:
             record: Dict[str, Any] = {
@@ -138,9 +138,9 @@ def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
             for col_field in canonical_fields:
                 record[col_field] = None
 
-            for idx, col_field in index_to_canonical.items():
-                if idx < len(row):
-                    record[col_field] = parse_cell_value(row[idx])
+            for col_index, col_field in index_to_canonical.items():
+                if col_index < len(row):
+                    record[col_field] = parse_cell_value(row[col_index])
 
             all_consolidated_records.append(record)
 
@@ -189,7 +189,7 @@ async def pull_google_sheets(req: PullGoogleSheetsRequest):
                         continue
                     reader = list(csv.reader(io.StringIO(csv_text)))
                     if len(reader) >= 2:
-                        headers = [str(col).strip() for col in reader[0]]
+                        headers = [str(column_name).strip() for column_name in reader[0]]
                         rows = reader[1:]
                         sheets_payload.append(SingleSheetPayload(sheet_name=tab, headers=headers, rows=rows))
             except Exception:
