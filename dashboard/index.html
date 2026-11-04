@@ -73,30 +73,29 @@
         </div>
       </div>
 
-      <!-- 4. Normalisasi Tabel Relasional (ERD) -->
+      <!-- 4. Normalisasi Tabel -->
       <div id="normalization-container" class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
           <div>
-            <h3 class="text-md font-bold text-slate-900">4. Normalisasi Tabel Relasional (ERD)</h3>
-            <p class="text-xs text-slate-500">Pecah tabel gabungan menjadi tabel-tabel master & fakta yang saling terhubung lewat Primary Key & Foreign Key.</p>
+            <h3 class="text-md font-bold text-slate-900">4. Normalisasi Tabel</h3>
           </div>
           <div class="flex gap-2">
             <button id="btn-run-normalize" onclick="runNormalization()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold">
-              Proses Normalisasi ERD
+              Proses Normalisasi
             </button>
             <a id="btn-export-norm-excel" href="/api/export-normalized-excel" download class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold hidden">
-              Export Excel Multi-Tab (.xlsx)
+              Export Excel (.xlsx)
             </a>
           </div>
         </div>
 
         <div id="norm-summary-box" class="p-3 bg-blue-50 border border-blue-200 rounded text-xs text-blue-900 font-mono mb-4 hidden">
-          <span class="font-bold">Alur Relasi ERD: </span><span id="norm-summary-text"></span>
+          <span class="font-bold">Alur Relasi: </span><span id="norm-summary-text"></span>
         </div>
 
         <div id="norm-tables-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="col-span-full p-4 text-center text-slate-400 text-xs border border-dashed rounded">
-            Klik 'Proses Normalisasi ERD' untuk menghasilkan tabel-tabel relasional.
+            Klik 'Proses Normalisasi' untuk menampilkan tabel.
           </div>
         </div>
       </div>
@@ -224,12 +223,12 @@
 
         const data = await res.json();
         renderNormalizedTables(data);
-        alert("Normalisasi ERD berhasil!");
+        alert("Normalisasi berhasil.");
       } catch (err) {
         alert("Error: " + err.message);
       } finally {
         btn.disabled = false;
-        btn.innerText = "Proses Normalisasi ERD";
+        btn.innerText = "Proses Normalisasi";
       }
     }
 
