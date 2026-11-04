@@ -5,4 +5,7 @@ __pycache__/
 data/*.db
 AGENTS.md
 agents.md
+*.xlsx
+*.xls
+
 
