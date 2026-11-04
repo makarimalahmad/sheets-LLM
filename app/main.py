@@ -3,23 +3,27 @@ import re
 import csv
 import io
 import httpx
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from app.models import (
     SingleSheetPayload,
     MultiSheetConsolidateRequest,
     PullGoogleSheetsRequest,
-    ConsolidatedDataset
+    ConsolidatedDataset,
+    NormalizedTable,
+    NormalizedResponse,
+    NormalizeRequest
 )
 from app.mapper import harmonize_sheets_schema
+from app.normalizer import normalize_dataset, export_normalized_to_excel_buffer
 
 app = FastAPI(
     title="Sheets LLM Backend API",
-    description="Sistem AI standarisasi nama kolom dan penggabungan data multi-sheet spreadsheet.",
-    version="2.0.0"
+    description="Sistem AI standarisasi nama kolom, penggabungan data multi-sheet, dan normalisasi relasional (ERD).",
+    version="2.1.0"
 )
 
 app.add_middleware(
@@ -32,6 +36,7 @@ app.add_middleware(
 
 # Simpan data sementara di memori RAM server
 LATEST_MEMORY_DATA: Dict[str, Any] = {}
+LATEST_NORMALIZED_DATA: Dict[str, Any] = {}
 
 # Ubah teks angka atau mata uang menjadi float
 def parse_cell_value(val: Any) -> Any:
@@ -78,7 +83,6 @@ def parse_cell_value(val: Any) -> Any:
         return float(cleaned_text)
     except ValueError:
         return text_value
-    return text_value
 
 # Tampilkan halaman dashboard HTML
 @app.get("/")
@@ -179,7 +183,6 @@ async def pull_google_sheets(req: PullGoogleSheetsRequest):
     seen_sheet_contents = set()
 
     async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-        # 1. Deteksi nama-nama tab asli dari halaman Google Sheets
         detected_tabs: List[str] = []
         try:
             res_page = await client.get(f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit")
@@ -188,7 +191,6 @@ async def pull_google_sheets(req: PullGoogleSheetsRequest):
         except Exception:
             pass
 
-        # 2. Gunakan tab yang terdeteksi atau coba Sheet1 sampai Sheet20
         default_fallback_tabs = [f"Sheet{i}" for i in range(1, 21)]
         target_tabs = req.tab_names or detected_tabs or default_fallback_tabs
 
@@ -201,7 +203,6 @@ async def pull_google_sheets(req: PullGoogleSheetsRequest):
                     if "<html" in csv_text.lower():
                         continue
 
-                    # Cegah duplikasi data jika Google fallback ke tab pertama untuk tab yang tidak ada
                     if csv_text in seen_sheet_contents:
                         continue
                     seen_sheet_contents.add(csv_text)
@@ -221,3 +222,59 @@ async def pull_google_sheets(req: PullGoogleSheetsRequest):
         )
 
     return consolidate_multi_sheets(MultiSheetConsolidateRequest(sheets=sheets_payload))
+
+# Normalisasikan data tabel menjadi tabel-tabel relasional (ERD) via AI
+@app.post("/api/normalize", response_model=NormalizedResponse)
+async def normalize_table_data(req: Optional[NormalizeRequest] = None):
+    global LATEST_NORMALIZED_DATA
+
+    records_to_normalize: List[Dict[str, Any]] = []
+
+    if req and req.records:
+        records_to_normalize = req.records
+    elif req and req.sheet_url:
+        consolidated = await pull_google_sheets(PullGoogleSheetsRequest(sheet_url=req.sheet_url))
+        records_to_normalize = consolidated.records
+    elif LATEST_MEMORY_DATA and LATEST_MEMORY_DATA.get("records"):
+        records_to_normalize = LATEST_MEMORY_DATA.get("records", [])
+
+    if not records_to_normalize:
+        raise HTTPException(status_code=400, detail="Tidak ada data untuk dinormalisasi. Jalankan Sync AI terlebih dahulu.")
+
+    try:
+        normalized_result = normalize_dataset(records_to_normalize)
+    except Exception as error_detail:
+        raise HTTPException(status_code=500, detail=f"Gagal melakukan normalisasi AI: {str(error_detail)}")
+
+    LATEST_NORMALIZED_DATA = normalized_result
+    return NormalizedResponse(
+        status="success",
+        erd_summary=normalized_result.get("erd_summary", "Relasi normalisasi berhasil dibentuk"),
+        tables=normalized_result.get("tables", [])
+    )
+
+# Ambil hasil normalisasi terakhir dari memori RAM
+@app.get("/api/latest-normalized", response_model=NormalizedResponse)
+def get_latest_normalized():
+    if not LATEST_NORMALIZED_DATA or not LATEST_NORMALIZED_DATA.get("tables"):
+        raise HTTPException(status_code=404, detail="Belum ada data normalisasi tersimpan")
+    return NormalizedResponse(
+        status="success",
+        erd_summary=LATEST_NORMALIZED_DATA.get("erd_summary", ""),
+        tables=LATEST_NORMALIZED_DATA.get("tables", [])
+    )
+
+# Export seluruh tabel relasional hasil normalisasi ke 1 file Excel multi-tab
+@app.get("/api/export-normalized-excel")
+def export_normalized_excel():
+    if not LATEST_NORMALIZED_DATA or not LATEST_NORMALIZED_DATA.get("tables"):
+        raise HTTPException(status_code=404, detail="Belum ada data normalisasi untuk diekspor")
+
+    tables = LATEST_NORMALIZED_DATA.get("tables", [])
+    stream = export_normalized_to_excel_buffer(tables)
+
+    return StreamingResponse(
+        stream,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=data_ternormalisasi_erd.xlsx"}
+    )

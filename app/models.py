@@ -20,3 +20,19 @@ class ConsolidatedDataset(BaseModel):
     canonical_fields: List[str]
     sheet_mappings: Dict[str, Dict[str, Optional[str]]]
     records: List[Dict[str, Any]]
+
+class NormalizedTable(BaseModel):
+    table_name: str
+    columns: List[str]
+    primary_key: Optional[str] = None
+    foreign_keys: Optional[List[Dict[str, Any]]] = None
+    rows: List[List[Any]]
+
+class NormalizedResponse(BaseModel):
+    status: str = "success"
+    erd_summary: str
+    tables: List[NormalizedTable]
+
+class NormalizeRequest(BaseModel):
+    records: Optional[List[Dict[str, Any]]] = Field(default=None, description="Daftar record flat untuk dinormalisasi")
+    sheet_url: Optional[str] = Field(default=None, description="Atau link Google Sheets yang ingin dinormalisasi langsung")

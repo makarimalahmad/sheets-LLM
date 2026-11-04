@@ -72,11 +72,39 @@
           </table>
         </div>
       </div>
+
+      <!-- 4. Normalisasi Tabel Relasional (ERD) -->
+      <div id="normalization-container" class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
+          <div>
+            <h3 class="text-md font-bold text-slate-900">4. Normalisasi Tabel Relasional (ERD)</h3>
+            <p class="text-xs text-slate-500">Pecah tabel gabungan menjadi tabel-tabel master & fakta yang saling terhubung lewat Primary Key & Foreign Key.</p>
+          </div>
+          <div class="flex gap-2">
+            <button id="btn-run-normalize" onclick="runNormalization()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold">
+              Proses Normalisasi ERD
+            </button>
+            <a id="btn-export-norm-excel" href="/api/export-normalized-excel" download class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold hidden">
+              Export Excel Multi-Tab (.xlsx)
+            </a>
+          </div>
+        </div>
+
+        <div id="norm-summary-box" class="p-3 bg-blue-50 border border-blue-200 rounded text-xs text-blue-900 font-mono mb-4 hidden">
+          <span class="font-bold">Alur Relasi ERD: </span><span id="norm-summary-text"></span>
+        </div>
+
+        <div id="norm-tables-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="col-span-full p-4 text-center text-slate-400 text-xs border border-dashed rounded">
+            Klik 'Proses Normalisasi ERD' untuk menghasilkan tabel-tabel relasional.
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
   <script>
-    // Ambil data terbaru dari RAM server (misal setelah user klik Sync di Google Sheets)
+    // Ambil data terbaru dari RAM server
     async function fetchLatestData() {
       try {
         const res = await fetch('/api/latest-data');
@@ -84,8 +112,15 @@
         if (data && data.records && data.records.length > 0) {
           renderResult(data);
         }
+
+        // Cek data normalisasi terbaru
+        const normRes = await fetch('/api/latest-normalized');
+        if (normRes.ok) {
+          const normData = await normRes.json();
+          renderNormalizedTables(normData);
+        }
       } catch (err) {
-        console.error("Gagal mengambil data RAM:", err);
+        console.error("Gagal mengambil data:", err);
       }
     }
 
@@ -169,6 +204,75 @@
       document.getElementById('btn-download-excel').classList.remove('hidden');
     }
 
+    // Jalankan normalisasi relasional ERD via AI
+    async function runNormalization() {
+      const btn = document.getElementById('btn-run-normalize');
+      btn.disabled = true;
+      btn.innerText = "Memproses Normalisasi...";
+
+      try {
+        const res = await fetch('/api/normalize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || "Gagal melakukan normalisasi");
+        }
+
+        const data = await res.json();
+        renderNormalizedTables(data);
+        alert("Normalisasi ERD berhasil!");
+      } catch (err) {
+        alert("Error: " + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "Proses Normalisasi ERD";
+      }
+    }
+
+    // Tampilkan tabel-tabel hasil normalisasi
+    function renderNormalizedTables(data) {
+      if (!data || !data.tables || data.tables.length === 0) return;
+
+      if (data.erd_summary) {
+        document.getElementById('norm-summary-text').innerText = data.erd_summary;
+        document.getElementById('norm-summary-box').classList.remove('hidden');
+      }
+
+      const grid = document.getElementById('norm-tables-grid');
+      grid.innerHTML = data.tables.map(tbl => {
+        const pkBadge = tbl.primary_key ? `<span class="ml-2 px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded font-mono text-[10px]">PK: ${tbl.primary_key}</span>` : '';
+        const headers = tbl.columns.map(c => `<th class="p-2 bg-slate-100 border-b border-slate-200 text-slate-700">${c}</th>`).join('');
+        const rows = tbl.rows.map(r => `
+          <tr class="hover:bg-slate-50 border-b border-slate-100">
+            ${r.map(cell => `<td class="p-2 font-mono text-slate-700">${cell !== null ? cell : '-'}</td>`).join('')}
+          </tr>
+        `).join('');
+
+        return `
+          <div class="border rounded border-slate-200 p-3 bg-white">
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="font-bold text-xs text-slate-900 flex items-center">
+                Tabel: ${tbl.table_name} ${pkBadge}
+              </h4>
+              <span class="text-[10px] text-slate-400 font-mono">${tbl.rows.length} baris</span>
+            </div>
+            <div class="overflow-x-auto max-h-56">
+              <table class="w-full text-left text-xs border-collapse">
+                <thead><tr>${headers}</tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('btn-export-norm-excel').classList.remove('hidden');
+    }
+
     // Export langsung ke file Excel (.xls)
     function downloadExcel() {
       const table = document.getElementById("table-data");
@@ -190,7 +294,7 @@
       link.click();
     }
 
-    // Cek otomatis apakah ada data di RAM saat pertama buka
+    // Cek data saat halaman dimuat
     fetchLatestData();
   </script>
 </body>
