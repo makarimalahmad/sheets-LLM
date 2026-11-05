@@ -1,152 +1,12 @@
 import os
 import json
-import re
 import io
 from typing import Dict, List, Any, Optional
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from app.mapper import get_llm_client, get_llm_model
 
-# Fungsi pembantu untuk membuat kode ID unik yang rapi dan ringkas
-def generate_code_id(text_input: Any, prefix_code: str = "") -> str:
-    raw_text = str(text_input).strip()
-    words = re.findall(r"[a-zA-Z0-9]+", raw_text)
-    if not words:
-        return f"{prefix_code}_1" if prefix_code else "1"
-
-    if len(words) == 1 and len(words[0]) <= 3:
-        code_result = words[0].upper()
-    else:
-        acronym = "".join(word[0].upper() for word in words if not word.isdigit())
-        numbers = [word for word in words if word.isdigit()]
-        if numbers:
-            code_result = f"{acronym}_{'_'.join(numbers)}" if acronym else "_".join(numbers)
-        else:
-            code_result = acronym if len(acronym) >= 2 else raw_text[:3].upper()
-
-    if prefix_code and not code_result.startswith(prefix_code):
-        return f"{prefix_code}_{code_result}"
-    return code_result
-
-# Eksekusi pembuatan data tabel relasional oleh Python berdasarkan cetak biru skema dari LLM
-def execute_normalization_engine(records: List[Dict[str, Any]], blueprint: Dict[str, Any]) -> Dict[str, Any]:
-    tables_definition = blueprint.get("tables", [])
-    if not tables_definition:
-        raise ValueError("Cetak biru tabel kosong dari LLM")
-
-    master_ids: Dict[str, Dict[str, str]] = {}
-    child_ids: Dict[str, Dict[tuple, str]] = {}
-    tables_output = []
-
-    for table_def in tables_definition:
-        table_name = table_def["table_name"]
-        table_type = table_def.get("table_type", "master")
-        columns = table_def.get("columns", [])
-        primary_key = table_def.get("primary_key", "")
-        foreign_keys = table_def.get("foreign_keys", [])
-        source_column = table_def.get("source_column")
-
-        table_rows = []
-
-        if table_type == "master":
-            master_ids[table_name] = {}
-            seen_values = set()
-            for row_item in records:
-                cell_value = row_item.get(source_column)
-                if cell_value is not None and cell_value not in seen_values:
-                    seen_values.add(cell_value)
-                    if len(columns) >= 2 and any("id" in str(col_name).lower() for col_name in columns):
-                        unique_id = generate_code_id(cell_value)
-                        master_ids[table_name][cell_value] = unique_id
-                        row_values = []
-                        for col_name in columns:
-                            if "id" in str(col_name).lower():
-                                row_values.append(unique_id)
-                            else:
-                                row_values.append(cell_value)
-                        table_rows.append(row_values)
-                    else:
-                        master_ids[table_name][cell_value] = str(cell_value)
-                        table_rows.append([cell_value])
-
-        elif table_type == "child":
-            child_ids[table_name] = {}
-            parent_table = table_def.get("parent_table")
-            parent_source_col = next(
-                (target_def.get("source_column") for target_def in tables_definition if target_def.get("table_name") == parent_table),
-                None
-            )
-
-            seen_combinations = set()
-            for row_item in records:
-                parent_value = row_item.get(parent_source_col)
-                child_value = row_item.get(source_column)
-                parent_id = master_ids.get(parent_table, {}).get(parent_value, str(parent_value))
-
-                combo_key = (parent_id, child_value)
-                if combo_key not in seen_combinations and child_value is not None:
-                    seen_combinations.add(combo_key)
-                    child_id = generate_code_id(child_value, prefix_code=str(parent_id))
-                    child_ids[table_name][combo_key] = child_id
-
-                    row_values = []
-                    for col_name in columns:
-                        if col_name == table_def.get("parent_fk_col") or (isinstance(col_name, str) and "parent" in col_name.lower()):
-                            row_values.append(parent_id)
-                        elif col_name == table_def.get("primary_key") or (isinstance(col_name, str) and col_name.lower().endswith("id")):
-                            row_values.append(child_id)
-                        else:
-                            row_values.append(child_value)
-                    table_rows.append(row_values)
-
-        elif table_type == "fact":
-            for row_item in records:
-                row_values = []
-                for col_name in columns:
-                    matched = False
-                    for foreign_key in foreign_keys:
-                        if foreign_key.get("column") == col_name:
-                            ref_table = foreign_key.get("references_table")
-                            if ref_table in child_ids:
-                                p_table = next((target_def.get("parent_table") for target_def in tables_definition if target_def.get("table_name") == ref_table), None)
-                                p_source = next((target_def.get("source_column") for target_def in tables_definition if target_def.get("table_name") == p_table), None)
-                                c_source = next((target_def.get("source_column") for target_def in tables_definition if target_def.get("table_name") == ref_table), None)
-                                parent_pk = master_ids.get(p_table, {}).get(row_item.get(p_source))
-                                child_fk = child_ids.get(ref_table, {}).get((parent_pk, row_item.get(c_source)))
-                                row_values.append(child_fk)
-                                matched = True
-                                break
-                            elif ref_table in master_ids:
-                                m_source = next((target_def.get("source_column") for target_def in tables_definition if target_def.get("table_name") == ref_table), None)
-                                master_fk = master_ids.get(ref_table, {}).get(row_item.get(m_source))
-                                row_values.append(master_fk)
-                                matched = True
-                                break
-                    if not matched:
-                        metric_value = None
-                        for metric in table_def.get("metric_columns", []):
-                            target_col = metric.get("target") or metric.get("target_column")
-                            source_col = metric.get("source") or metric.get("source_column")
-                            if target_col == col_name:
-                                metric_value = row_item.get(source_col)
-                                break
-                        row_values.append(metric_value if metric_value is not None else row_item.get(col_name))
-                table_rows.append(row_values)
-
-        tables_output.append({
-            "table_name": table_name,
-            "columns": columns,
-            "primary_key": primary_key,
-            "foreign_keys": foreign_keys,
-            "rows": table_rows
-        })
-
-    return {
-        "erd_summary": blueprint.get("erd_summary", "Relasi normalisasi berhasil dibentuk"),
-        "tables": tables_output
-    }
-
-# Normalisasi data flat menjadi tabel-tabel relasional (LLM merancang arsitektur, Python mengeksekusi seluruh baris)
+# Normalisasi data flat menjadi tabel-tabel relasional murni via LLM
 def normalize_dataset(records: List[Dict[str, Any]]) -> Dict[str, Any]:
     client = get_llm_client()
     if not client:
@@ -154,59 +14,38 @@ def normalize_dataset(records: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     model_name = get_llm_model()
 
-    # Ambil maksimal 4 baris sampel agar AI fokus memahami pola hubungan tanpa boros token
-    sample_records = records[:4]
+    # Ambil maksimal 50 baris untuk dianalisis LLM agar hemat token namun representatif
+    sample_records = records[:50]
 
-    prompt = f"""Kamu adalah AI arsitek database untuk normalisasi tabel flat menjadi skema relasional (1NF, 2NF, 3NF / ERD).
-Diberikan contoh kolom dan baris data:
+    prompt = f"""Kamu adalah AI arsitek database untuk normalisasi tabel spreadsheet menjadi skema relasional (1NF, 2NF, 3NF / ERD).
+Diberikan baris data denormalisasi (flat table):
 {json.dumps(sample_records, indent=2)}
 
 Tugas kamu:
-Rancang struktur tabel relasional (tanpa perlu mengetik semua baris data).
-Identifikasi:
-1. Tabel master / dimensi independen (misal: Game, Channel).
-2. Tabel turunan bertingkat jika ada (misal: Denomination yang bergantung pada Game).
-3. Tabel fakta / transaksi penghubung (misal: Harga per Channel & Denom).
-4. Kolom sumber asli yang dipetakan ke tiap tabel.
+1. Analisis entitas independen (master/dimensi) dan tabel relasi/transaksi (fakta/junction).
+2. Normalisasikan data di atas menjadi tabel-tabel relasional terpisah (misalnya tabel master judul game, tabel denominasi dengan relasi ke game, tabel channel penjualan, dan tabel relasi distribusi harga/fakta).
+3. Buat ID atau kode unik yang ringkas, deskriptif, dan konsisten (misal 'Free Fire' -> 'FF', '10 diamond' -> 'FF_10_D').
+4. Hasilkan baris data unik dan bersih untuk setiap tabel tanpa ada baris duplikat.
+5. Hubungkan tabel-tabel tersebut menggunakan Foreign Key ID yang telah dibuat.
 
-Keluarkan format HANYA JSON valid dengan struktur:
+Keluarkan format HANYA objek JSON dengan struktur persis seperti ini:
 {{
-  "erd_summary": "Deskripsi alur relasi (misal Game Title -> Game Denom -> Game Dist Channel <- Channel)",
+  "erd_summary": "Deskripsi alur relasi tabel (contoh: Game Title -> Game Denom -> Game Dist Channel <- Channel)",
   "tables": [
     {{
-      "table_name": "Game Title",
-      "table_type": "master",
-      "primary_key": "ID",
-      "source_column": "kolom_sumber_di_data",
-      "columns": ["Title", "ID"]
-    }},
-    {{
-      "table_name": "Game Denom",
-      "table_type": "child",
-      "parent_table": "Game Title",
-      "parent_fk_col": "ID Title",
-      "primary_key": "ID DENOM",
-      "source_column": "kolom_sumber_di_data",
-      "columns": ["ID Title", "Denomination", "ID DENOM"],
-      "foreign_keys": [{{"column": "ID Title", "references_table": "Game Title", "references_column": "ID"}}]
-    }},
-    {{
-      "table_name": "Channel",
-      "table_type": "master",
-      "primary_key": "Channel",
-      "source_column": "kolom_sumber_di_data",
-      "columns": ["Channel"]
-    }},
-    {{
-      "table_name": "Game Dist Channel",
-      "table_type": "fact",
-      "primary_key": "ID DENOM + Channel",
-      "columns": ["ID DENOM", "Channel", "Harga"],
+      "table_name": "Nama Tabel",
+      "columns": ["Kolom1", "Kolom2"],
+      "primary_key": "Nama Kolom PK",
       "foreign_keys": [
-        {{"column": "ID DENOM", "references_table": "Game Denom", "references_column": "ID DENOM"}},
-        {{"column": "Channel", "references_table": "Channel", "references_column": "Channel"}}
+        {{
+          "column": "Nama Kolom FK",
+          "references_table": "Tabel Tujuan",
+          "references_column": "Kolom Tujuan"
+        }}
       ],
-      "metric_columns": [{{"source": "kolom_harga_sumber", "target": "Harga"}}]
+      "rows": [
+        ["Nilai1", "Nilai2"]
+      ]
     }}
   ]
 }}"""
@@ -222,15 +61,8 @@ Keluarkan format HANYA JSON valid dengan struktur:
     )
 
     content = response.choices[0].message.content
-    blueprint = json.loads(content)
-
-    # Eksekusi seluruh baris data asli menggunakan mesin Python
-    try:
-        return execute_normalization_engine(records, blueprint)
-    except Exception:
-        if "tables" in blueprint and all("rows" in target_table for target_table in blueprint["tables"]):
-            return blueprint
-        raise
+    result = json.loads(content)
+    return result
 
 # Buat file Excel multi-tab dari hasil normalisasi
 def export_normalized_to_excel_buffer(tables_data: List[Dict[str, Any]]) -> io.BytesIO:
