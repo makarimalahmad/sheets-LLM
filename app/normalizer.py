@@ -7,135 +7,137 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from app.mapper import get_llm_client, get_llm_model
 
-# Helper membuat kode ID unik yang rapi dan ringkas
-def generate_code_id(text: Any, prefix: str = "") -> str:
-    s = str(text).strip()
-    words = re.findall(r"[a-zA-Z0-9]+", s)
+# Fungsi pembantu untuk membuat kode ID unik yang rapi dan ringkas
+def generate_code_id(text_input: Any, prefix_code: str = "") -> str:
+    raw_text = str(text_input).strip()
+    words = re.findall(r"[a-zA-Z0-9]+", raw_text)
     if not words:
-        return f"{prefix}_1" if prefix else "1"
+        return f"{prefix_code}_1" if prefix_code else "1"
 
     if len(words) == 1 and len(words[0]) <= 3:
-        code = words[0].upper()
+        code_result = words[0].upper()
     else:
-        acronym = "".join(w[0].upper() for w in words if not w.isdigit())
-        nums = [w for w in words if w.isdigit()]
-        if nums:
-            code = f"{acronym}_{'_'.join(nums)}" if acronym else "_".join(nums)
+        acronym = "".join(word[0].upper() for word in words if not word.isdigit())
+        numbers = [word for word in words if word.isdigit()]
+        if numbers:
+            code_result = f"{acronym}_{'_'.join(numbers)}" if acronym else "_".join(numbers)
         else:
-            code = acronym if len(acronym) >= 2 else s[:3].upper()
+            code_result = acronym if len(acronym) >= 2 else raw_text[:3].upper()
 
-    return f"{prefix}_{code}" if prefix and not code.startswith(prefix) else code
+    if prefix_code and not code_result.startswith(prefix_code):
+        return f"{prefix_code}_{code_result}"
+    return code_result
 
 # Eksekusi pembuatan data tabel relasional oleh Python berdasarkan cetak biru skema dari LLM
 def execute_normalization_engine(records: List[Dict[str, Any]], blueprint: Dict[str, Any]) -> Dict[str, Any]:
-    tables_def = blueprint.get("tables", [])
-    if not tables_def:
+    tables_definition = blueprint.get("tables", [])
+    if not tables_definition:
         raise ValueError("Cetak biru tabel kosong dari LLM")
 
     master_ids: Dict[str, Dict[str, str]] = {}
     child_ids: Dict[str, Dict[tuple, str]] = {}
     tables_output = []
 
-    for t_def in tables_def:
-        t_name = t_def["table_name"]
-        t_type = t_def.get("table_type", "master")
-        cols = t_def.get("columns", [])
-        p_key = t_def.get("primary_key", "")
-        f_keys = t_def.get("foreign_keys", [])
-        src_col = t_def.get("source_column")
+    for table_def in tables_definition:
+        table_name = table_def["table_name"]
+        table_type = table_def.get("table_type", "master")
+        columns = table_def.get("columns", [])
+        primary_key = table_def.get("primary_key", "")
+        foreign_keys = table_def.get("foreign_keys", [])
+        source_column = table_def.get("source_column")
 
         table_rows = []
 
-        if t_type == "master":
-            master_ids[t_name] = {}
-            seen = set()
+        if table_type == "master":
+            master_ids[table_name] = {}
+            seen_values = set()
             for row_item in records:
-                val = row_item.get(src_col)
-                if val is not None and val not in seen:
-                    seen.add(val)
-                    if len(cols) >= 2 and any("id" in str(c).lower() for c in cols):
-                        uid = generate_code_id(val)
-                        master_ids[t_name][val] = uid
-                        row_vals = []
-                        for c in cols:
-                            if "id" in str(c).lower():
-                                row_vals.append(uid)
+                cell_value = row_item.get(source_column)
+                if cell_value is not None and cell_value not in seen_values:
+                    seen_values.add(cell_value)
+                    if len(columns) >= 2 and any("id" in str(col_name).lower() for col_name in columns):
+                        unique_id = generate_code_id(cell_value)
+                        master_ids[table_name][cell_value] = unique_id
+                        row_values = []
+                        for col_name in columns:
+                            if "id" in str(col_name).lower():
+                                row_values.append(unique_id)
                             else:
-                                row_vals.append(val)
-                        table_rows.append(row_vals)
+                                row_values.append(cell_value)
+                        table_rows.append(row_values)
                     else:
-                        master_ids[t_name][val] = str(val)
-                        table_rows.append([val])
+                        master_ids[table_name][cell_value] = str(cell_value)
+                        table_rows.append([cell_value])
 
-        elif t_type == "child":
-            child_ids[t_name] = {}
-            parent_table = t_def.get("parent_table")
-            parent_src_col = next(
-                (td.get("source_column") for td in tables_def if td.get("table_name") == parent_table),
+        elif table_type == "child":
+            child_ids[table_name] = {}
+            parent_table = table_def.get("parent_table")
+            parent_source_col = next(
+                (target_def.get("source_column") for target_def in tables_definition if target_def.get("table_name") == parent_table),
                 None
             )
 
-            seen = set()
+            seen_combinations = set()
             for row_item in records:
-                parent_val = row_item.get(parent_src_col)
-                child_val = row_item.get(src_col)
-                parent_id = master_ids.get(parent_table, {}).get(parent_val, str(parent_val))
+                parent_value = row_item.get(parent_source_col)
+                child_value = row_item.get(source_column)
+                parent_id = master_ids.get(parent_table, {}).get(parent_value, str(parent_value))
 
-                combo_key = (parent_id, child_val)
-                if combo_key not in seen and child_val is not None:
-                    seen.add(combo_key)
-                    child_uid = generate_code_id(child_val, prefix=str(parent_id))
-                    child_ids[t_name][combo_key] = child_uid
+                combo_key = (parent_id, child_value)
+                if combo_key not in seen_combinations and child_value is not None:
+                    seen_combinations.add(combo_key)
+                    child_id = generate_code_id(child_value, prefix_code=str(parent_id))
+                    child_ids[table_name][combo_key] = child_id
 
-                    row_vals = []
-                    for c in cols:
-                        if c == t_def.get("parent_fk_col") or (isinstance(c, str) and "parent" in c.lower()):
-                            row_vals.append(parent_id)
-                        elif c == t_def.get("primary_key") or (isinstance(c, str) and c.lower().endswith("id")):
-                            row_vals.append(child_uid)
+                    row_values = []
+                    for col_name in columns:
+                        if col_name == table_def.get("parent_fk_col") or (isinstance(col_name, str) and "parent" in col_name.lower()):
+                            row_values.append(parent_id)
+                        elif col_name == table_def.get("primary_key") or (isinstance(col_name, str) and col_name.lower().endswith("id")):
+                            row_values.append(child_id)
                         else:
-                            row_vals.append(child_val)
-                    table_rows.append(row_vals)
+                            row_values.append(child_value)
+                    table_rows.append(row_values)
 
-        elif t_type == "fact":
+        elif table_type == "fact":
             for row_item in records:
-                row_vals = []
-                for c in cols:
+                row_values = []
+                for col_name in columns:
                     matched = False
-                    for fk in f_keys:
-                        if fk.get("column") == c:
-                            ref_tbl = fk.get("references_table")
-                            if ref_tbl in child_ids:
-                                p_tbl = next((td.get("parent_table") for td in tables_def if td.get("table_name") == ref_tbl), None)
-                                p_src = next((td.get("source_column") for td in tables_def if td.get("table_name") == p_tbl), None)
-                                c_src = next((td.get("source_column") for td in tables_def if td.get("table_name") == ref_tbl), None)
-                                p_id = master_ids.get(p_tbl, {}).get(row_item.get(p_src))
-                                c_id = child_ids.get(ref_tbl, {}).get((p_id, row_item.get(c_src)))
-                                row_vals.append(c_id)
+                    for foreign_key in foreign_keys:
+                        if foreign_key.get("column") == col_name:
+                            ref_table = foreign_key.get("references_table")
+                            if ref_table in child_ids:
+                                p_table = next((target_def.get("parent_table") for target_def in tables_definition if target_def.get("table_name") == ref_table), None)
+                                p_source = next((target_def.get("source_column") for target_def in tables_definition if target_def.get("table_name") == p_table), None)
+                                c_source = next((target_def.get("source_column") for target_def in tables_definition if target_def.get("table_name") == ref_table), None)
+                                parent_pk = master_ids.get(p_table, {}).get(row_item.get(p_source))
+                                child_fk = child_ids.get(ref_table, {}).get((parent_pk, row_item.get(c_source)))
+                                row_values.append(child_fk)
                                 matched = True
                                 break
-                            elif ref_tbl in master_ids:
-                                m_src = next((td.get("source_column") for td in tables_def if td.get("table_name") == ref_tbl), None)
-                                m_id = master_ids.get(ref_tbl, {}).get(row_item.get(m_src))
-                                row_vals.append(m_id)
+                            elif ref_table in master_ids:
+                                m_source = next((target_def.get("source_column") for target_def in tables_definition if target_def.get("table_name") == ref_table), None)
+                                master_fk = master_ids.get(ref_table, {}).get(row_item.get(m_source))
+                                row_values.append(master_fk)
                                 matched = True
                                 break
                     if not matched:
-                        metric_val = None
-                        for mc in t_def.get("metric_columns", []):
-                            target_c = mc.get("target") or mc.get("target_column")
-                            source_c = mc.get("source") or mc.get("source_column")
-                            if target_c == c:
-                                metric_val = row_item.get(source_c)
+                        metric_value = None
+                        for metric in table_def.get("metric_columns", []):
+                            target_col = metric.get("target") or metric.get("target_column")
+                            source_col = metric.get("source") or metric.get("source_column")
+                            if target_col == col_name:
+                                metric_value = row_item.get(source_col)
                                 break
-                        row_vals.append(metric_val if metric_val is not None else row_item.get(c))
-                table_rows.append(row_vals)
+                        row_values.append(metric_value if metric_value is not None else row_item.get(col_name))
+                table_rows.append(row_values)
 
         tables_output.append({
-            "table_name": t_name,
-            "columns": cols,
-            "primary_key": p_key,
-            "foreign_keys": f_keys,
+            "table_name": table_name,
+            "columns": columns,
+            "primary_key": primary_key,
+            "foreign_keys": foreign_keys,
             "rows": table_rows
         })
 
@@ -144,7 +146,7 @@ def execute_normalization_engine(records: List[Dict[str, Any]], blueprint: Dict[
         "tables": tables_output
     }
 
-# Normalisasi data flat menjadi tabel-tabel relasional (Best Practice: LLM merancang arsitektur, Python mengeksekusi seluruh baris)
+# Normalisasi data flat menjadi tabel-tabel relasional (LLM merancang arsitektur, Python mengeksekusi seluruh baris)
 def normalize_dataset(records: List[Dict[str, Any]]) -> Dict[str, Any]:
     client = get_llm_client()
     if not client:
@@ -222,12 +224,11 @@ Keluarkan format HANYA JSON valid dengan struktur:
     content = response.choices[0].message.content
     blueprint = json.loads(content)
 
-    # Eksekusi seluruh baris data asli (mau ribuan baris) menggunakan mesin Python
+    # Eksekusi seluruh baris data asli menggunakan mesin Python
     try:
         return execute_normalization_engine(records, blueprint)
     except Exception:
-        # Fallback jika bentuk blueprint berbeda dari standar
-        if "tables" in blueprint and all("rows" in t for t in blueprint["tables"]):
+        if "tables" in blueprint and all("rows" in target_table for target_table in blueprint["tables"]):
             return blueprint
         raise
 
@@ -246,13 +247,13 @@ def export_normalized_to_excel_buffer(tables_data: List[Dict[str, Any]]) -> io.B
         bottom=Side(style="thin", color="CBD5E1")
     )
 
-    for table in tables_data:
-        raw_name = str(table.get("table_name", "Sheet"))
+    for table_item in tables_data:
+        raw_name = str(table_item.get("table_name", "Sheet"))
         safe_sheet_name = raw_name[:31].replace(":", "").replace("/", "").replace("\\", "").replace("?", "").replace("*", "")
         worksheet = workbook.create_sheet(title=safe_sheet_name)
 
-        columns = table.get("columns", [])
-        rows = table.get("rows", [])
+        columns = table_item.get("columns", [])
+        rows = table_item.get("rows", [])
 
         # Tulis Header
         for col_index, col_name in enumerate(columns, start=1):
@@ -264,20 +265,20 @@ def export_normalized_to_excel_buffer(tables_data: List[Dict[str, Any]]) -> io.B
 
         # Tulis Data
         for row_index, row_data in enumerate(rows, start=2):
-            for col_index, val in enumerate(row_data, start=1):
-                cell = worksheet.cell(row=row_index, column=col_index, value=val)
+            for col_index, cell_value in enumerate(row_data, start=1):
+                cell = worksheet.cell(row=row_index, column=col_index, value=cell_value)
                 cell.font = cell_font
                 cell.border = thin_border
-                if isinstance(val, (int, float)):
+                if isinstance(cell_value, (int, float)):
                     cell.alignment = Alignment(horizontal="right", vertical="center")
                 else:
                     cell.alignment = Alignment(horizontal="left", vertical="center")
 
         # Sesuaikan lebar kolom otomatis
-        for col in worksheet.columns:
-            max_len = max(len(str(cell.value or "")) for cell in col)
-            col_letter = col[0].column_letter
-            worksheet.column_dimensions[col_letter].width = max(max_len + 4, 12)
+        for column_cells in worksheet.columns:
+            max_length = max(len(str(cell.value or "")) for cell in column_cells)
+            col_letter = column_cells[0].column_letter
+            worksheet.column_dimensions[col_letter].width = max(max_length + 4, 12)
 
     output_stream = io.BytesIO()
     workbook.save(output_stream)
