@@ -22,8 +22,8 @@ Diberikan baris data denormalisasi (flat table):
 {json.dumps(sample_records, indent=2)}
 
 Tugas kamu:
-1. Analisis entitas independen (master/dimensi) dan tabel relasi/transaksi (fakta/junction).
-2. Normalisasikan data di atas menjadi tabel-tabel relasional terpisah (misalnya tabel master judul game, tabel denominasi dengan relasi ke game, tabel channel penjualan, dan tabel relasi distribusi harga/fakta).
+1. Analisis entitas master (data utama) dan tabel relasi/penghubung.
+2. Normalisasikan data di atas menjadi tabel-tabel relasional terpisah (misalnya tabel master judul game, tabel denominasi dengan relasi ke game, tabel channel penjualan, dan tabel relasi harga). Hindari nama teknis seperti 'fact', 'price_fact', atau 'junction'; gunakan nama deskriptif yang mudah dipahami seperti 'game_dist_channel' atau 'relasi_harga'.
 3. Buat ID atau kode unik yang ringkas, deskriptif, dan konsisten (misal 'Free Fire' -> 'FF', '10 diamond' -> 'FF_10_D').
 4. Hasilkan baris data unik dan bersih untuk setiap tabel tanpa ada baris duplikat.
 5. Hubungkan tabel-tabel tersebut menggunakan Foreign Key ID yang telah dibuat.
