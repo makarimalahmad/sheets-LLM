@@ -8,7 +8,7 @@
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen">
   <div class="max-w-7xl mx-auto px-4 py-8">
-    <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b pb-4 gap-4">
+    <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b pb-4 gap-4">
       <div>
         <h1 class="text-2xl font-bold text-slate-900">Dashboard Sheets LLM</h1>
       </div>
@@ -18,36 +18,42 @@
       </div>
     </header>
 
-    <!-- Kartu Ringkasan -->
-    <div class="mb-6">
+    <!-- Navigasi Menu 2 Fitur Mandiri -->
+    <div class="flex border-b border-slate-200 mb-6 gap-2">
+      <button id="tab-btn-consolidate" onclick="switchMainTab('consolidate')" class="py-2.5 px-5 border-b-2 font-semibold text-sm border-blue-600 text-blue-600">
+        1. Konsolidasi Kolom
+      </button>
+      <button id="tab-btn-normalize" onclick="switchMainTab('normalize')" class="py-2.5 px-5 border-b-2 font-semibold text-sm border-transparent text-slate-500 hover:text-slate-700">
+        2. Normalisasi Tabel
+      </button>
+    </div>
+
+    <!-- FITUR 1: KONSOLIDASI KOLOM (SYNC AI) -->
+    <div id="section-consolidate" class="space-y-6">
       <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
         <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Total Data Masuk</p>
         <h3 id="stat-total" class="text-2xl font-bold text-slate-900">0</h3>
       </div>
-    </div>
 
-    <!-- Kotak Tarik Data dari Link Google Sheets -->
-    <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200 mb-6">
-      <h2 class="text-sm font-bold text-slate-900 mb-1">Sync AI</h2>
-      <p class="text-xs text-slate-500 mb-3">Tempel link Google Sheets</p>
-      <div class="flex flex-col sm:flex-row gap-2">
-        <input id="input-sheet-url" type="text" placeholder="https://docs.google.com/spreadsheets/d/..." class="w-full text-xs p-2.5 border rounded border-slate-300 font-mono focus:outline-none focus:border-blue-500">
-        <button id="btn-pull" onclick="pullGoogleSheets()" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold whitespace-nowrap">
-          Run
-        </button>
+      <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
+        <h2 class="text-sm font-bold text-slate-900 mb-1">Sync AI (Penyelarasan Kolom Acak)</h2>
+        <p class="text-xs text-slate-500 mb-3">Tempel link Google Sheets untuk menyatukan kolom yang berbeda nama menjadi 1 tabel gabungan.</p>
+        <div class="flex flex-col sm:flex-row gap-2">
+          <input id="input-sheet-url" type="text" placeholder="https://docs.google.com/spreadsheets/d/..." class="w-full text-xs p-2.5 border rounded border-slate-300 font-mono focus:outline-none focus:border-blue-500">
+          <button id="btn-pull" onclick="pullGoogleSheets()" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold whitespace-nowrap">
+            Run
+          </button>
+        </div>
       </div>
-    </div>
 
-    <!-- Hasil Penyelarasan & Tabel Data -->
-    <div id="multi-result-container" class="space-y-6">
       <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
-        <h3 class="text-md font-bold text-slate-900 mb-2">1. Nama Kolom Standar yang Dibuat AI</h3>
+        <h3 class="text-md font-bold text-slate-900 mb-2">Nama Kolom Standar yang Dibuat AI</h3>
         <div id="canonical-tags" class="flex flex-wrap gap-2 mb-4">
-          <span class="text-xs text-slate-400">Belum ada data. Silakan kirim dari Google Sheets atau tempel link dan klik Run.</span>
+          <span class="text-xs text-slate-400">Belum ada data. Silakan tempel link dan klik Run.</span>
         </div>
 
         <div id="mapping-section" class="hidden">
-          <h3 class="text-md font-bold text-slate-900 mb-2">2. Penyesuaian Kolom Tiap Sheet</h3>
+          <h3 class="text-md font-bold text-slate-900 mb-2">Penyesuaian Kolom Tiap Sheet</h3>
           <div class="overflow-x-auto">
             <pre id="mapping-matrix" class="p-3 bg-slate-100 rounded text-xs text-slate-700 overflow-x-auto font-mono"></pre>
           </div>
@@ -56,7 +62,7 @@
 
       <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
         <div class="flex justify-between items-center mb-3">
-          <h3 class="text-md font-bold text-slate-900">3. Tabel Data Gabungan</h3>
+          <h3 class="text-md font-bold text-slate-900">Tabel Data Gabungan</h3>
           <button id="btn-download-excel" onclick="downloadExcel()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold hidden">
             Export Excel (.xls)
           </button>
@@ -72,17 +78,27 @@
           </table>
         </div>
       </div>
+    </div>
 
-      <!-- 4. Normalisasi Tabel -->
-      <div id="normalization-container" class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+    <!-- FITUR 2: NORMALISASI TABEL RELASIONAL (MANDIRI) -->
+    <div id="section-normalize" class="hidden space-y-6">
+      <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
+        <h2 class="text-sm font-bold text-slate-900 mb-1">Normalisasi Tabel (Langsung dari Link Google Sheets)</h2>
+        <p class="text-xs text-slate-500 mb-3">Tempel link Google Sheets untuk langsung memecah data flat menjadi tabel-tabel master dan relasi.</p>
+        <div class="flex flex-col sm:flex-row gap-2">
+          <input id="input-norm-url" type="text" placeholder="https://docs.google.com/spreadsheets/d/..." class="w-full text-xs p-2.5 border rounded border-slate-300 font-mono focus:outline-none focus:border-blue-500">
+          <button id="btn-run-normalize" onclick="runDirectNormalization()" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold whitespace-nowrap">
+            Proses Normalisasi
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
           <div>
-            <h3 class="text-md font-bold text-slate-900">4. Normalisasi Tabel</h3>
+            <h3 class="text-md font-bold text-slate-900">Hasil Tabel yang Ternormalisasi</h3>
           </div>
-          <div class="flex gap-2">
-            <button id="btn-run-normalize" onclick="runNormalization()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold">
-              Proses Normalisasi
-            </button>
+          <div>
             <a id="btn-export-norm-excel" href="/api/export-normalized-excel" download class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold hidden">
               Export Excel (.xlsx)
             </a>
@@ -95,7 +111,7 @@
 
         <div id="norm-tables-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="col-span-full p-4 text-center text-slate-400 text-xs border border-dashed rounded">
-            Klik 'Proses Normalisasi' untuk menampilkan tabel.
+            Silakan tempel link dan klik 'Proses Normalisasi'.
           </div>
         </div>
       </div>
@@ -103,6 +119,26 @@
   </div>
 
   <script>
+    // Ganti tab tampilan menu
+    function switchMainTab(tabName) {
+      const secConsolidate = document.getElementById('section-consolidate');
+      const secNormalize = document.getElementById('section-normalize');
+      const btnConsolidate = document.getElementById('tab-btn-consolidate');
+      const btnNormalize = document.getElementById('tab-btn-normalize');
+
+      if (tabName === 'consolidate') {
+        secConsolidate.classList.remove('hidden');
+        secNormalize.classList.add('hidden');
+        btnConsolidate.className = "py-2.5 px-5 border-b-2 font-semibold text-sm border-blue-600 text-blue-600";
+        btnNormalize.className = "py-2.5 px-5 border-b-2 font-semibold text-sm border-transparent text-slate-500 hover:text-slate-700";
+      } else {
+        secConsolidate.classList.add('hidden');
+        secNormalize.classList.remove('hidden');
+        btnNormalize.className = "py-2.5 px-5 border-b-2 font-semibold text-sm border-blue-600 text-blue-600";
+        btnConsolidate.className = "py-2.5 px-5 border-b-2 font-semibold text-sm border-transparent text-slate-500 hover:text-slate-700";
+      }
+    }
+
     // Ambil data terbaru dari RAM server
     async function fetchLatestData() {
       try {
@@ -112,7 +148,6 @@
           renderResult(data);
         }
 
-        // Cek data normalisasi terbaru
         const normRes = await fetch('/api/latest-normalized');
         if (normRes.ok) {
           const normData = await normRes.json();
@@ -123,6 +158,7 @@
       }
     }
 
+    // Eksekusi Fitur 1: Konsolidasi Kolom
     async function pullGoogleSheets() {
       const urlInput = document.getElementById('input-sheet-url').value.trim();
       if (!urlInput) {
@@ -157,63 +193,19 @@
       }
     }
 
-    // Tampilkan hasil penggabungan langsung ke layar
-    function renderResult(data) {
-      const records = data.records || [];
-      const mappings = data.sheet_mappings || {};
-      const canonicals = data.canonical_fields || [];
-
-      if (records.length === 0) {
-        return;
-      }
-
-      document.getElementById('stat-total').innerText = records.length;
-
-      // 1. Render Tag Kolom Standar
-      const tagsContainer = document.getElementById('canonical-tags');
-      tagsContainer.innerHTML = canonicals.map(field_name => `
-        <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded font-mono text-xs font-semibold">${field_name}</span>
-      `).join('');
-
-      // 2. Render Pemetaan Kolom Tiap Sheet
-      const mappingBox = document.getElementById('mapping-section');
-      if (mappings && Object.keys(mappings).length > 0) {
-        document.getElementById('mapping-matrix').innerText = JSON.stringify(mappings, null, 2);
-        mappingBox.classList.remove('hidden');
-      } else {
-        mappingBox.classList.add('hidden');
-      }
-
-      // 3. Render Tabel Gabungan
-      const thead = document.getElementById('consolidated-table-head');
-      thead.innerHTML = `<tr><th class="p-2.5">Sumber</th>${canonicals.map(col_name => `<th class="p-2.5">${col_name}</th>`).join('')}</tr>`;
-
-      const cbody = document.getElementById('consolidated-table-body');
-      cbody.innerHTML = records.map(row_item => `
-        <tr class="hover:bg-slate-50">
-          <td class="p-2.5 font-bold text-slate-800">${row_item._source_sheet || '-'}</td>
-          ${canonicals.map(field_name => {
-            const val = row_item[field_name];
-            const display = (typeof val === 'number') ? val.toLocaleString('id-ID') : (val !== null ? val : '-');
-            return `<td class="p-2.5 font-mono text-slate-700">${display}</td>`;
-          }).join('')}
-        </tr>
-      `).join('');
-
-      document.getElementById('btn-download-excel').classList.remove('hidden');
-    }
-
-    // Jalankan normalisasi relasional ERD via AI
-    async function runNormalization() {
+    // Eksekusi Fitur 2: Normalisasi Langsung (Mandiri)
+    async function runDirectNormalization() {
+      const urlInput = document.getElementById('input-norm-url').value.trim() || document.getElementById('input-sheet-url').value.trim();
       const btn = document.getElementById('btn-run-normalize');
       btn.disabled = true;
       btn.innerText = "Memproses Normalisasi...";
 
       try {
+        const payload = urlInput ? { sheet_url: urlInput } : {};
         const res = await fetch('/api/normalize', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({})
+          body: JSON.stringify(payload)
         });
 
         if (!res.ok) {
@@ -232,6 +224,50 @@
       }
     }
 
+    // Tampilkan hasil konsolidasi ke layar
+    function renderResult(data) {
+      const records = data.records || [];
+      const mappings = data.sheet_mappings || {};
+      const canonicals = data.canonical_fields || [];
+
+      if (records.length === 0) return;
+
+      document.getElementById('stat-total').innerText = records.length;
+
+      // Render Tag Kolom Standar
+      const tagsContainer = document.getElementById('canonical-tags');
+      tagsContainer.innerHTML = canonicals.map(field_name => `
+        <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded font-mono text-xs font-semibold">${field_name}</span>
+      `).join('');
+
+      // Render Pemetaan Kolom Tiap Sheet
+      const mappingBox = document.getElementById('mapping-section');
+      if (mappings && Object.keys(mappings).length > 0) {
+        document.getElementById('mapping-matrix').innerText = JSON.stringify(mappings, null, 2);
+        mappingBox.classList.remove('hidden');
+      } else {
+        mappingBox.classList.add('hidden');
+      }
+
+      // Render Tabel Gabungan
+      const thead = document.getElementById('consolidated-table-head');
+      thead.innerHTML = `<tr><th class="p-2.5">Sumber</th>${canonicals.map(col_name => `<th class="p-2.5">${col_name}</th>`).join('')}</tr>`;
+
+      const cbody = document.getElementById('consolidated-table-body');
+      cbody.innerHTML = records.map(row_item => `
+        <tr class="hover:bg-slate-50">
+          <td class="p-2.5 font-bold text-slate-800">${row_item._source_sheet || '-'}</td>
+          ${canonicals.map(field_name => {
+            const val = row_item[field_name];
+            const display = (typeof val === 'number') ? val.toLocaleString('id-ID') : (val !== null ? val : '-');
+            return `<td class="p-2.5 font-mono text-slate-700">${display}</td>`;
+          }).join('')}
+        </tr>
+      `).join('');
+
+      document.getElementById('btn-download-excel').classList.remove('hidden');
+    }
+
     // Tampilkan tabel-tabel hasil normalisasi
     function renderNormalizedTables(data) {
       if (!data || !data.tables || data.tables.length === 0) return;
@@ -244,10 +280,10 @@
       const grid = document.getElementById('norm-tables-grid');
       grid.innerHTML = data.tables.map(tbl => {
         const pkBadge = tbl.primary_key ? `<span class="ml-2 px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded font-mono text-[10px]">PK: ${tbl.primary_key}</span>` : '';
-        const headers = tbl.columns.map(c => `<th class="p-2 bg-slate-100 border-b border-slate-200 text-slate-700">${c}</th>`).join('');
-        const rows = tbl.rows.map(r => `
+        const headers = tbl.columns.map(col_name => `<th class="p-2 bg-slate-100 border-b border-slate-200 text-slate-700">${col_name}</th>`).join('');
+        const rows = tbl.rows.map(row_data => `
           <tr class="hover:bg-slate-50 border-b border-slate-100">
-            ${r.map(cell => `<td class="p-2 font-mono text-slate-700">${cell !== null ? cell : '-'}</td>`).join('')}
+            ${row_data.map(cell => `<td class="p-2 font-mono text-slate-700">${cell !== null ? cell : '-'}</td>`).join('')}
           </tr>
         `).join('');
 
@@ -272,7 +308,7 @@
       document.getElementById('btn-export-norm-excel').classList.remove('hidden');
     }
 
-    // Export langsung ke file Excel (.xls)
+    // Export langsung ke file Excel (.xls) untuk tabel gabungan
     function downloadExcel() {
       const table = document.getElementById("table-data");
       const rows = Array.from(table.querySelectorAll("tr"));
@@ -293,7 +329,7 @@
       link.click();
     }
 
-    // Cek data saat halaman dimuat
+    // Inisialisasi awal saat load
     fetchLatestData();
   </script>
 </body>
