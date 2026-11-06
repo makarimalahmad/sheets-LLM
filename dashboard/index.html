@@ -36,8 +36,8 @@
       </div>
 
       <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
-        <h2 class="text-sm font-bold text-slate-900 mb-1">Sync AI (Penyelarasan Kolom Acak)</h2>
-        <p class="text-xs text-slate-500 mb-3">Tempel link Google Sheets untuk menyatukan kolom yang berbeda nama menjadi 1 tabel gabungan.</p>
+        <h2 class="text-sm font-bold text-slate-900 mb-1">Sync AI</h2>
+        <p class="text-xs text-slate-500 mb-3">Tempel link Google Sheets</p>
         <div class="flex flex-col sm:flex-row gap-2">
           <input id="input-sheet-url" type="text" placeholder="https://docs.google.com/spreadsheets/d/..." class="w-full text-xs p-2.5 border rounded border-slate-300 font-mono focus:outline-none focus:border-blue-500">
           <button id="btn-pull" onclick="pullGoogleSheets()" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold whitespace-nowrap">
@@ -49,7 +49,7 @@
       <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
         <h3 class="text-md font-bold text-slate-900 mb-2">Nama Kolom Standar yang Dibuat AI</h3>
         <div id="canonical-tags" class="flex flex-wrap gap-2 mb-4">
-          <span class="text-xs text-slate-400">Belum ada data. Silakan tempel link dan klik Run.</span>
+          <p class="w-full text-xs text-slate-400 text-center">Belum ada data</p>
         </div>
 
         <div id="mapping-section" class="hidden">
@@ -72,7 +72,7 @@
             <thead id="consolidated-table-head" class="bg-slate-100 border-b border-slate-200 text-slate-700 font-semibold"></thead>
             <tbody id="consolidated-table-body" class="divide-y divide-slate-100">
               <tr>
-                <td class="p-4 text-center text-slate-400">Belum ada data ditampilkan.</td>
+                <td class="p-4 text-center text-slate-400">Belum ada data</td>
               </tr>
             </tbody>
           </table>
@@ -83,12 +83,12 @@
     <!-- FITUR 2: NORMALISASI TABEL RELASIONAL (MANDIRI) -->
     <div id="section-normalize" class="hidden space-y-6">
       <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
-        <h2 class="text-sm font-bold text-slate-900 mb-1">Normalisasi Tabel (Langsung dari Link Google Sheets)</h2>
-        <p class="text-xs text-slate-500 mb-3">Tempel link Google Sheets untuk langsung memecah data flat menjadi tabel-tabel master dan relasi.</p>
+        <h2 class="text-sm font-bold text-slate-900 mb-1">Normalisasi Tabel</h2>
+        <p class="text-xs text-slate-500 mb-3">Tempel link Google Sheets</p>
         <div class="flex flex-col sm:flex-row gap-2">
           <input id="input-norm-url" type="text" placeholder="https://docs.google.com/spreadsheets/d/..." class="w-full text-xs p-2.5 border rounded border-slate-300 font-mono focus:outline-none focus:border-blue-500">
           <button id="btn-run-normalize" onclick="runDirectNormalization()" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold whitespace-nowrap">
-            Proses Normalisasi
+            Run
           </button>
         </div>
       </div>
@@ -110,8 +110,8 @@
         </div>
 
         <div id="norm-tables-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="col-span-full p-4 text-center text-slate-400 text-xs border border-dashed rounded">
-            Silakan tempel link dan klik 'Proses Normalisasi'.
+          <div class="col-span-full p-4 text-center text-slate-400 text-xs">
+            Belum ada data
           </div>
         </div>
       </div>
@@ -160,9 +160,9 @@
 
     // Eksekusi Fitur 1: Konsolidasi Kolom
     async function pullGoogleSheets() {
-      const urlInput = document.getElementById('input-sheet-url').value.trim();
+      const urlInput = document.getElementById('input-sheet-url').value.trim() || document.getElementById('input-norm-url').value.trim();
       if (!urlInput) {
-        alert("Silakan tempel link Google Sheets terlebih dahulu.");
+        alert("Tempel link Google Sheets terlebih dahulu.");
         return;
       }
 
@@ -196,31 +196,35 @@
     // Eksekusi Fitur 2: Normalisasi Langsung (Mandiri)
     async function runDirectNormalization() {
       const urlInput = document.getElementById('input-norm-url').value.trim() || document.getElementById('input-sheet-url').value.trim();
+      if (!urlInput) {
+        alert("Tempel link Google Sheets terlebih dahulu.");
+        return;
+      }
+
       const btn = document.getElementById('btn-run-normalize');
       btn.disabled = true;
-      btn.innerText = "Memproses Normalisasi...";
+      btn.innerText = "Sedang Memproses...";
 
       try {
-        const payload = urlInput ? { sheet_url: urlInput } : {};
         const res = await fetch('/api/normalize', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({ sheet_url: urlInput })
         });
 
         if (!res.ok) {
           const err = await res.json();
-          throw new Error(err.detail || "Gagal melakukan normalisasi");
+          throw new Error(err.detail || "Gagal memproses data");
         }
 
         const data = await res.json();
         renderNormalizedTables(data);
-        alert("Normalisasi berhasil.");
+        alert("Data berhasil diproses.");
       } catch (err) {
         alert("Error: " + err.message);
       } finally {
         btn.disabled = false;
-        btn.innerText = "Proses Normalisasi";
+        btn.innerText = "Run";
       }
     }
 

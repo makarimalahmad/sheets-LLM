@@ -239,7 +239,7 @@ async def normalize_table_data(req: Optional[NormalizeRequest] = None):
         records_to_normalize = LATEST_MEMORY_DATA.get("records", [])
 
     if not records_to_normalize:
-        raise HTTPException(status_code=400, detail="Tidak ada data untuk dinormalisasi. Jalankan Sync AI terlebih dahulu.")
+        raise HTTPException(status_code=400, detail="Tempel link Google Sheets terlebih dahulu.")
 
     try:
         normalized_result = normalize_dataset(records_to_normalize)

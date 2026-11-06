@@ -14,7 +14,7 @@ def normalize_dataset(records: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     model_name = get_llm_model()
 
-    # Ambil maksimal 50 baris untuk dianalisis LLM agar hemat token namun representatif
+    # Ambil maksimal 50 baris untuk dianalisis LLM agar hemat token 
     sample_records = records[:50]
 
     prompt = f"""Kamu adalah AI arsitek database untuk normalisasi tabel spreadsheet menjadi skema relasional (1NF, 2NF, 3NF / ERD).
