@@ -22,29 +22,67 @@ Diberikan baris data denormalisasi (flat table):
 {json.dumps(sample_records, indent=2)}
 
 Tugas kamu:
-1. Analisis entitas master (data utama) dan tabel relasi/penghubung.
-2. Normalisasikan data di atas menjadi tabel-tabel relasional terpisah (misalnya tabel master judul game, tabel denominasi dengan relasi ke game, tabel channel penjualan, dan tabel relasi harga). Hindari nama teknis seperti 'fact', 'price_fact', atau 'junction'; gunakan nama deskriptif yang mudah dipahami seperti 'game_dist_channel' atau 'relasi_harga'.
-3. Buat ID atau kode unik yang ringkas, deskriptif, dan konsisten (misal 'Free Fire' -> 'FF', '10 diamond' -> 'FF_10_D').
-4. Hasilkan baris data unik dan bersih untuk setiap tabel tanpa ada baris duplikat.
-5. Hubungkan tabel-tabel tersebut menggunakan Foreign Key ID yang telah dibuat.
+Pecah data denormalisasi di atas menjadi 4 tabel relasional terstruktur:
+1. Tabel Game Title (kolom: Title, ID) -> ID berupa kode akronim huruf besar (misal 'Free Fire' -> 'FF', 'Mobile Legends' -> 'ML', 'Roblox' -> 'RBX').
+2. Tabel Game Denom (kolom: ID Title, Denomination, ID DENOM) -> ID Title adalah FK ke Game Title. ID DENOM adalah PK gabungan ID Title dan Denom (contoh wajib persis: 'FF_10_D', 'FF_20_D', 'ML_50_D', 'RBX_80_R').
+3. Tabel Channel (kolom: Channel) -> daftar nama channel/toko unik (misal: Upoint, Dunia Games, Itemku).
+4. Tabel Game Dist Channel (kolom: ID DENOM, Channel, Harga) -> tabel relasi harga dengan Foreign Key 'ID DENOM' dan Foreign Key 'Channel'.
 
 Keluarkan format HANYA objek JSON dengan struktur persis seperti ini:
 {{
-  "erd_summary": "Deskripsi alur relasi tabel (contoh: Game Title -> Game Denom -> Game Dist Channel <- Channel)",
+  "erd_summary": "Game Title (ID) -> Game Denom (ID DENOM) -> Game Dist Channel <- Channel (Channel)",
   "tables": [
     {{
-      "table_name": "Nama Tabel",
-      "columns": ["Kolom1", "Kolom2"],
-      "primary_key": "Nama Kolom PK",
+      "table_name": "Game Title",
+      "columns": ["Title", "ID"],
+      "primary_key": "ID",
+      "foreign_keys": [],
+      "rows": [
+        ["Free Fire", "FF"]
+      ]
+    }},
+    {{
+      "table_name": "Game Denom",
+      "columns": ["ID Title", "Denomination", "ID DENOM"],
+      "primary_key": "ID DENOM",
       "foreign_keys": [
         {{
-          "column": "Nama Kolom FK",
-          "references_table": "Tabel Tujuan",
-          "references_column": "Kolom Tujuan"
+          "column": "ID Title",
+          "references_table": "Game Title",
+          "references_column": "ID"
         }}
       ],
       "rows": [
-        ["Nilai1", "Nilai2"]
+        ["FF", "10 diamond", "FF_10_D"]
+      ]
+    }},
+    {{
+      "table_name": "Channel",
+      "columns": ["Channel"],
+      "primary_key": "Channel",
+      "foreign_keys": [],
+      "rows": [
+        ["Upoint"]
+      ]
+    }},
+    {{
+      "table_name": "Game Dist Channel",
+      "columns": ["ID DENOM", "Channel", "Harga"],
+      "primary_key": "ID DENOM + Channel",
+      "foreign_keys": [
+        {{
+          "column": "ID DENOM",
+          "references_table": "Game Denom",
+          "references_column": "ID DENOM"
+        }},
+        {{
+          "column": "Channel",
+          "references_table": "Channel",
+          "references_column": "Channel"
+        }}
+      ],
+      "rows": [
+        ["FF_10_D", "Upoint", 12000]
       ]
     }}
   ]
