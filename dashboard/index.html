@@ -272,27 +272,32 @@
     function renderNormalizedTables(data) {
       if (!data || !data.tables || data.tables.length === 0) return;
 
+      const isSingleTable = data.tables.length === 1;
+      const maxHeightClass = isSingleTable ? "max-h-[600px]" : "max-h-64";
+
       const grid = document.getElementById('norm-tables-grid');
+      grid.className = isSingleTable ? "grid grid-cols-1 gap-4" : "grid grid-cols-1 md:grid-cols-2 gap-4";
+
       grid.innerHTML = data.tables.map(tbl => {
         const pkBadge = tbl.primary_key ? `<span class="ml-2 px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded font-mono text-[10px]">PK: ${tbl.primary_key}</span>` : '';
-        const headers = tbl.columns.map(col_name => `<th class="p-2 bg-slate-100 border-b border-slate-200 text-slate-700">${col_name}</th>`).join('');
+        const headers = tbl.columns.map(col_name => `<th class="p-2.5 bg-slate-100 border-b border-slate-200 text-slate-700 whitespace-nowrap">${col_name}</th>`).join('');
         const rows = tbl.rows.map(row_data => `
           <tr class="hover:bg-slate-50 border-b border-slate-100">
-            ${row_data.map(cell => `<td class="p-2 font-mono text-slate-700">${cell !== null ? cell : '-'}</td>`).join('')}
+            ${row_data.map(cell => `<td class="p-2.5 font-mono text-slate-700 whitespace-nowrap">${cell !== null ? cell : '-'}</td>`).join('')}
           </tr>
         `).join('');
 
         return `
-          <div class="border rounded border-slate-200 p-3 bg-white">
-            <div class="flex items-center justify-between mb-2">
-              <h4 class="font-bold text-xs text-slate-900 flex items-center">
+          <div class="border rounded border-slate-200 p-4 bg-white shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+              <h4 class="font-bold text-sm text-slate-900 flex items-center">
                 Tabel: ${tbl.table_name} ${pkBadge}
               </h4>
-              <span class="text-[10px] text-slate-400 font-mono">${tbl.rows.length} baris</span>
+              <span class="text-xs text-slate-400 font-mono">${tbl.rows.length} baris</span>
             </div>
-            <div class="overflow-x-auto max-h-56">
+            <div class="overflow-x-auto ${maxHeightClass}">
               <table class="w-full text-left text-xs border-collapse">
-                <thead><tr>${headers}</tr></thead>
+                <thead class="sticky top-0 bg-slate-100 shadow-sm"><tr>${headers}</tr></thead>
                 <tbody>${rows}</tbody>
               </table>
             </div>
