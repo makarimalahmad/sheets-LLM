@@ -23,8 +23,8 @@ Diberikan baris data denormalisasi (flat table):
 
 Tugas kamu:
 Pecah data denormalisasi di atas menjadi 4 tabel relasional terstruktur:
-1. Tabel Game Title (kolom: Title, ID) -> ID berupa kode akronim huruf besar (misal 'Free Fire' -> 'FF', 'Mobile Legends' -> 'ML', 'Roblox' -> 'RBX').
-2. Tabel Game Denom (kolom: ID Title, Denomination, ID DENOM) -> ID Title adalah FK ke Game Title. ID DENOM adalah PK gabungan ID Title dan Denom (contoh wajib persis: 'FF_10_D', 'FF_20_D', 'ML_50_D', 'RBX_80_R').
+1. Tabel Game Title (kolom: Title, ID) -> ID berupa kode akronim huruf besar (misal 'Free Fire' -> 'FF', 'Mobile Legends' -> 'ML', 'Roblox' -> 'RB').
+2. Tabel Game Denom (kolom: ID Title, Denomination, ID DENOM) -> ID Title adalah FK ke Game Title. Nilai Denomination harus sesuai mata uang game aslinya (misal '10 diamond', '80 robux'). ID DENOM adalah PK gabungan ID Title, nominal angka, dan singkatan mata uang (gunakan 'DM' untuk diamond seperti 'FF_10_DM', 'ML_50_DM'; dan 'RBX' untuk robux seperti 'RB_80_RBX').
 3. Tabel Channel (kolom: Channel) -> daftar nama channel/toko unik (misal: Upoint, Dunia Games, Itemku).
 4. Tabel Game Dist Channel (kolom: ID DENOM, Channel, Harga) -> tabel relasi harga dengan Foreign Key 'ID DENOM' dan Foreign Key 'Channel'.
 
@@ -53,7 +53,7 @@ Keluarkan format HANYA objek JSON dengan struktur persis seperti ini:
         }}
       ],
       "rows": [
-        ["FF", "10 diamond", "FF_10_D"]
+        ["FF", "10 diamond", "FF_10_DM"]
       ]
     }},
     {{
@@ -82,7 +82,7 @@ Keluarkan format HANYA objek JSON dengan struktur persis seperti ini:
         }}
       ],
       "rows": [
-        ["FF_10_D", "Upoint", 12000]
+        ["FF_10_DM", "Upoint", 12000]
       ]
     }}
   ]
