@@ -14,18 +14,36 @@ def is_catalog_dataset(sample_record: Dict[str, Any]) -> bool:
     return has_item and has_supplier
 
 # Deduplikasi varian item per supplier untuk seluruh baris data (Opsi A)
-def deduplicate_catalog_records(records: List[Dict[str, Any]]) -> List[List[Any]]:
+def deduplicate_catalog_records(records: List[Dict[str, Any]]):
     groups = {}
     original_cols = [str(k) for k in records[0].keys() if not str(k).startswith("_")]
-    item_key = next((k for k in original_cols if str(k).lower().strip() == "item"), "Item")
-    supplier_key = next((k for k in original_cols if "supplier" in str(k).lower().strip() or "vendor" in str(k).lower().strip()), "Supplier")
-    content_key = next((k for k in original_cols if "content" in str(k).lower().strip() or "game" in str(k).lower().strip()), "Content")
-    desc_key = next((k for k in original_cols if "description" in str(k).lower().strip() or "desc" in str(k).lower().strip()), "Description")
+
+    # Standarisasi nama kolom header agar selalu rapi: ID, Content, Item, Description, Supplier
+    display_cols = []
+    for col_name in original_cols:
+        col_lower = col_name.lower().replace("_", " ").strip()
+        if "id" in col_lower and ("tim" in col_lower or "team" in col_lower or col_lower == "id"):
+            display_cols.append("ID")
+        elif "content" in col_lower or "game" in col_lower:
+            display_cols.append("Content")
+        elif "item" in col_lower:
+            display_cols.append("Item")
+        elif "desc" in col_lower:
+            display_cols.append("Description")
+        elif "supplier" in col_lower or "vendor" in col_lower:
+            display_cols.append("Supplier")
+        else:
+            display_cols.append(col_name)
+
+    item_key = next((k for k in original_cols if "item" in str(k).lower().strip()), original_cols[0])
+    supplier_key = next((k for k in original_cols if "supplier" in str(k).lower().strip() or "vendor" in str(k).lower().strip()), None)
+    content_key = next((k for k in original_cols if "content" in str(k).lower().strip() or "game" in str(k).lower().strip()), None)
+    desc_key = next((k for k in original_cols if "description" in str(k).lower().strip() or "desc" in str(k).lower().strip()), None)
 
     for row_item in records:
-        supp_val = str(row_item.get(supplier_key, "")).strip().lower()
-        cont_val = str(row_item.get(content_key, "")).strip().lower()
-        desc_val = str(row_item.get(desc_key, "")).strip().lower()
+        supp_val = str(row_item.get(supplier_key, "") or "").strip().lower() if supplier_key else ""
+        cont_val = str(row_item.get(content_key, "") or "").strip().lower() if content_key else ""
+        desc_val = str(row_item.get(desc_key, "") or "").strip().lower() if desc_key else ""
 
         # Kunci keunikan: Supplier + Content + Description
         group_key = (supp_val, cont_val, desc_val)
@@ -39,11 +57,11 @@ def deduplicate_catalog_records(records: List[Dict[str, Any]]) -> List[List[Any]
             base_row = rows_in_group[0]
         else:
             # Ambil item dasar (terpendek tanpa suffix promo tambahan)
-            sorted_rows = sorted(rows_in_group, key=lambda r: len(str(r.get(item_key, ""))))
+            sorted_rows = sorted(rows_in_group, key=lambda r: len(str(r.get(item_key, "") or "")))
             base_row = sorted_rows[0]
         cleaned_rows.append([base_row.get(col_name) for col_name in original_cols])
 
-    return cleaned_rows
+    return display_cols, cleaned_rows
 
 # Normalisasi data flat menjadi tabel terstruktur via LLM
 def normalize_dataset(records: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -89,15 +107,15 @@ Keluarkan format HANYA objek JSON valid:
         summary_text = content_data.get("erd_summary", "Deduplikasi varian item per supplier berhasil.")
 
         # Eksekusi pembersihan menyeluruh untuk seluruh baris data
-        cleaned_table_rows = deduplicate_catalog_records(records)
+        clean_columns, cleaned_table_rows = deduplicate_catalog_records(records)
 
         return {
             "erd_summary": summary_text,
             "tables": [
                 {
                     "table_name": "Tabel Bersih",
-                    "columns": original_cols,
-                    "primary_key": next((k for k in original_cols if str(k).lower().strip() == "id"), None),
+                    "columns": clean_columns,
+                    "primary_key": next((k for k in clean_columns if str(k).lower().strip() == "id"), None),
                     "foreign_keys": [],
                     "rows": cleaned_table_rows
                 }
