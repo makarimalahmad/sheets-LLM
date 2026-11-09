@@ -50,20 +50,22 @@ def get_universal_product_key(row_item: Dict[str, Any], item_key: str, desc_key:
         ("anti_peluru", "anti_peluru"),
         ("anti peluru", "anti_peluru"),
         ("komposit", "kotak_komposit"),
-        ("pemula", "pilihan_pemula"),
-        ("fita", "fita_plan"),
-        ("funpack", "funpack")
+        ("pemula", "pilihan_pemula")
     ]
     for pattern, key_name in special_passes:
         if pattern in desc_text or pattern in item_text:
-            if key_name == "funpack":
-                nums = re.findall(r"\d+", desc_text) or re.findall(r"\d+", item_text)
-                return f"funpack_{nums[0]}" if nums else "funpack"
             return key_name
 
     # 2. Ambil angka nominal dari Description (nama produk resmi bahasa manusia)
     if desc_text and desc_text != "-" and desc_text != "none":
-        d_clean = re.sub(r"\(.*?\)", "", desc_text)
+        # Bersihkan bundling tambahan seperti fita, exercise plan, kuota mb/gb, funpack
+        d_clean = re.sub(r"\+.*fita.*", "", desc_text)
+        d_clean = re.sub(r"\+.*plan.*", "", d_clean)
+        d_clean = re.sub(r"\+.*mb.*", "", d_clean)
+        d_clean = re.sub(r"\+.*gb.*", "", d_clean)
+        d_clean = re.sub(r"\(.*?\)", "", d_clean)
+        d_clean = re.sub(r"\b(funpack|langganan|fita|promo|blanja|vcr|voucher|vouchers|disc|discount)\b", "", d_clean)
+
         # Jika ada format penjumlahan bonus (contoh: 11+1 Diamonds -> 12)
         plus_match = re.search(r"(\d+)\s*\+\s*(\d+)", d_clean)
         if plus_match:
@@ -84,8 +86,8 @@ def get_universal_product_key(row_item: Dict[str, Any], item_key: str, desc_key:
     # 3. Jika Description kosong atau tidak ada angka di Description, bersihkan nama Item
     clean_item = item_text
     clean_item = re.sub(r"^(dgd_|v\d+_|v\d+-|np_|mkios_|nontelco_|dtu_|mcash_p_|promobl_|blanja-v\d+-|diamond_telkomselidr_|star_telkomselidr_)", "", clean_item)
-    clean_item = re.sub(r"^(mlbb_|freefire_|aov_|cod_|rom_)", "", clean_item)
-    clean_item = re.sub(r"(_diamonds|_diamond|_voucher|_vcr|_disc.*|_promo.*|_dg.*|_ndione|_new\d*|_tact|_restac|_fntch|_rv_s|_ioh|_idv|_mytsel|_bns.*|_promoupoint)$", "", clean_item)
+    clean_item = re.sub(r"^(mlbb_|freefire_|aov_|cod_|rom_|hsr_|lad_|supersus_|booya_|bleach_|king_|rm_|gc_|ab_|as_|aether_gazer_)", "", clean_item)
+    clean_item = re.sub(r"(_diamonds|_diamond|_voucher|_vcr|_disc.*|_promo.*|_dg.*|_ndione|_new\d*|_tact|_restac|_fntch|_rv_s|_ioh|_idv|_mytsel|_bns.*|_promoupoint|_funpack.*|_fita.*)$", "", clean_item)
 
     # Deteksi kode item penjumlahan (contoh: DTU_MLBB_11_1 -> 12)
     combo_match = re.search(r"(\d+)_(\d+)", clean_item)
@@ -128,21 +130,22 @@ def choose_best_catalog_item(candidate_rows: List[Dict[str, Any]], game_name: st
         # Prioritas 1: Punya deskripsi lengkap (bukan kosong/None/strip)
         has_desc = 20 if (desc and desc not in ["-", "none", ""]) else 0
 
-        # Prioritas 2: Hindari nama item yang memiliki akhiran promo/distributor/channel
+        # Prioritas 2: Hindari nama item yang memiliki akhiran promo/distributor/channel/bundling
         has_promo_suffix = 1 if any(tag in item for tag in [
             "idv", "ndione", "ndispecial", "ndityp", "new26", "newioh", "dg_", "dgspend", "dgtp",
             "disc", "promo", "spend", "tact", "restac", "ewl", "mager", "ucnormal", "fita", "funpack",
-            "p_dg", "p_brandcom", "p_la", "p_blu", "bns", "free", "sktes"
+            "p_dg", "p_brandcom", "p_la", "p_blu", "bns", "free", "sktes", "cstm", "ctm", "dgd_", "blanja", "dtu_"
         ]) else 0
 
-        # Prioritas 3: Nama item yang bersih/standar (misal GROWTOPIA_ABUNDANCE lebih bagus dari GROWTOPIA_ABUNDANCE_idv)
-        is_clean_base = 5 if not has_promo_suffix else 0
+        # Prioritas 3: Nama item yang bersih/standar (misal freefire_12 lebih bagus dari freefire_12_funpack_op)
+        has_clean_game_prefix = 5 if item.startswith((clean_game, game_name.lower(), "aov_", "cod_")) and not has_promo_suffix else 0
+        is_clean_base = 3 if not has_promo_suffix else 0
 
         # Prioritas 4: Nama item mengandung kata game jika relevan
         has_game_name = 3 if clean_game in item.replace("_", "") else 0
 
         # Prioritas 5: Lebih pendek lebih bagus
-        return (has_desc, is_clean_base, -has_promo_suffix, has_game_name, -len(item))
+        return (has_desc, -has_promo_suffix, has_clean_game_prefix, is_clean_base, has_game_name, -len(item))
 
     sorted_candidates = sorted(candidate_rows, key=score_row, reverse=True)
     return sorted_candidates[0]
