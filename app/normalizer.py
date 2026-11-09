@@ -14,50 +14,113 @@ def is_catalog_dataset(sample_record: Dict[str, Any]) -> bool:
     has_supplier = any("supplier" in k or "vendor" in k for k in keys_lower)
     return has_item and has_supplier
 
-# Ambil angka nominal pecahan item (contoh: "freefire_140" -> "140", "mkios_5_diamonds" -> "5")
-def get_item_nominal(item_text: Any) -> str:
-    numbers = re.findall(r"\d+", str(item_text or ""))
-    if numbers:
-        return numbers[0]
-    return ""
+# Ekstraksi identitas produk/denominasi kanonikal secara universal
+def get_universal_product_key(row_item: Dict[str, Any], item_key: str, desc_key: Optional[str]) -> str:
+    desc_text = str(row_item.get(desc_key, "") or "").strip().lower() if desc_key else ""
+    item_text = str(row_item.get(item_key, "") or "").strip().lower()
+
+    # 1. Deteksi paket langganan, membership, pass, atau bundle khusus
+    special_passes = [
+        ("twilight", "twilight_pass"),
+        ("weekly diamond pass", "weekly_diamond_pass"),
+        ("weekly pass", "weekly_diamond_pass"),
+        ("wdp", "weekly_diamond_pass"),
+        ("starlight", "starlight_member"),
+        ("star_telkomselidr", "starlight_member"),
+        ("monthly epic", "monthly_epic_bundle"),
+        ("weekly elite", "weekly_elite_bundle"),
+        ("diamond pass", "diamond_pass"),
+        ("aurum pass", "aurum_pass"),
+        ("aurumpass", "aurum_pass"),
+        ("companionship", "companionship_pack"),
+        ("cpack", "companionship_pack"),
+        ("express supply pass", "express_supply_pass"),
+        ("hsr_esp", "express_supply_pass"),
+        ("royal grow pass", "royal_grow_pass"),
+        ("growtopia_rgp", "royal_grow_pass"),
+        ("gem abundance", "gem_abundance"),
+        ("growtopia_abundance", "gem_abundance"),
+        ("gem bounty", "gem_bounty"),
+        ("growtopia_bounty", "gem_bounty"),
+        ("gem fountain", "gem_fountain"),
+        ("growtopia_fountain", "gem_fountain"),
+        ("rainin", "rainin_gems"),
+        ("chest o", "chest_o_gems"),
+        ("battle pass", "battle_pass"),
+        ("anti_peluru", "anti_peluru"),
+        ("anti peluru", "anti_peluru"),
+        ("komposit", "kotak_komposit"),
+        ("pemula", "pilihan_pemula"),
+        ("fita", "fita_plan"),
+        ("funpack", "funpack")
+    ]
+    for pattern, key_name in special_passes:
+        if pattern in desc_text or pattern in item_text:
+            if key_name == "funpack":
+                nums = re.findall(r"\d+", desc_text) or re.findall(r"\d+", item_text)
+                return f"funpack_{nums[0]}" if nums else "funpack"
+            return key_name
+
+    # 2. Ambil angka nominal dari Description (nama produk resmi bahasa manusia)
+    if desc_text and desc_text != "-" and desc_text != "none":
+        d_clean = re.sub(r"\(.*?\)", "", desc_text)
+        # Jika ada format penjumlahan bonus (contoh: 11+1 Diamonds -> 12)
+        plus_match = re.search(r"(\d+)\s*\+\s*(\d+)", d_clean)
+        if plus_match:
+            v1, v2 = int(plus_match.group(1)), int(plus_match.group(2))
+            if v1 in [11, 25, 53, 77, 154, 256, 367, 503, 774, 1708, 217, 4003]:
+                return f"denom_{v1 + v2}"
+
+        d_clean = re.sub(r"\+.*", "", d_clean)
+        d_nums = re.findall(r"\d+", d_clean)
+        if d_nums:
+            num_val = d_nums[0]
+            # Standarisasi alias nominal kembar (169 -> 170, 282 -> 296, 56 -> 59)
+            if num_val == "169": num_val = "170"
+            elif num_val == "282": num_val = "296"
+            elif num_val == "56": num_val = "59"
+            return f"denom_{num_val}"
+
+    # 3. Jika Description kosong atau tidak ada angka di Description, bersihkan nama Item
+    clean_item = item_text
+    clean_item = re.sub(r"^(dgd_|v\d+_|v\d+-|np_|mkios_|nontelco_|dtu_|mcash_p_|promobl_|blanja-v\d+-|diamond_telkomselidr_|star_telkomselidr_)", "", clean_item)
+    clean_item = re.sub(r"^(mlbb_|freefire_|aov_|cod_|rom_)", "", clean_item)
+    clean_item = re.sub(r"(_diamonds|_diamond|_voucher|_vcr|_disc.*|_promo.*|_dg.*|_ndione|_new\d*|_tact|_restac|_fntch|_rv_s|_ioh|_idv|_mytsel|_bns.*|_promoupoint)$", "", clean_item)
+
+    # Deteksi kode item penjumlahan (contoh: DTU_MLBB_11_1 -> 12)
+    combo_match = re.search(r"(\d+)_(\d+)", clean_item)
+    if combo_match:
+        v1, v2 = int(combo_match.group(1)), int(combo_match.group(2))
+        if v1 in [11, 25, 53, 77, 154, 256, 367, 503, 774]:
+            return f"denom_{v1 + v2}"
+
+    item_nums = re.findall(r"\d+", clean_item)
+    if item_nums:
+        num_val = item_nums[0]
+        if num_val == "169": num_val = "170"
+        elif num_val == "282": num_val = "296"
+        elif num_val == "56": num_val = "59"
+        return f"denom_{num_val}"
+
+    return clean_item if clean_item else item_text
 
 # Pilih baris item terbaik dari kumpulan kandidat varian yang sama
 def choose_best_catalog_item(candidate_rows: List[Dict[str, Any]], game_name: str, item_key: str, desc_key: str) -> Dict[str, Any]:
-    best_item = candidate_rows[0]
+    clean_game = game_name.replace("_", "").lower()
 
-    for current_row in candidate_rows:
-        current_desc = str(current_row.get(desc_key, "") or "").strip()
-        best_desc = str(best_item.get(desc_key, "") or "").strip()
+    def score_row(row_candidate: Dict[str, Any]):
+        desc = str(row_candidate.get(desc_key, "") or "").strip()
+        item = str(row_candidate.get(item_key, "") or "").strip().lower()
 
-        current_name = str(current_row.get(item_key, "") or "").lower().strip()
-        best_name = str(best_item.get(item_key, "") or "").lower().strip()
+        has_desc = 10 if (desc and desc != "-" and desc.lower() != "none") else 0
+        has_game_name = 5 if clean_game in item.replace("_", "") else 0
+        is_promo = 1 if any(p in item for p in ["promo", "disc", "spend", "gpy", "tact", "restac", "ewl", "mager", "dg_"]) else 0
+        is_clean_base = 2 if item.startswith(("freefire_", "aov_", "cod_", "nontelco_", "v2_mlbb_")) else 0
 
-        # 1. Prioritaskan baris yang memiliki deskripsi lengkap (bukan kosong/tanda strip)
-        has_current_desc = bool(current_desc and current_desc != "-")
-        has_best_desc = bool(best_desc and best_desc != "-")
+        return (has_desc, -is_promo, is_clean_base, has_game_name, -len(item))
 
-        if has_current_desc and not has_best_desc:
-            best_item = current_row
-            continue
-        elif not has_current_desc and has_best_desc:
-            continue
-
-        # 2. Prioritaskan nama item yang mengandung nama game (contoh: "freefire_5" lebih utama dari "mkios_5")
-        clean_game = game_name.replace("_", "").lower()
-        current_has_game = clean_game in current_name.replace("_", "")
-        best_has_game = clean_game in best_name.replace("_", "")
-
-        if current_has_game and not best_has_game:
-            best_item = current_row
-            continue
-        elif not current_has_game and best_has_game:
-            continue
-
-        # 3. Pilih kode item yang lebih pendek dan bersih
-        if len(current_name) < len(best_name):
-            best_item = current_row
-
-    return best_item
+    sorted_candidates = sorted(candidate_rows, key=score_row, reverse=True)
+    return sorted_candidates[0]
 
 # Deduplikasi varian item per supplier untuk seluruh baris data (Opsi A)
 def deduplicate_catalog_records(records: List[Dict[str, Any]]):
@@ -97,19 +160,15 @@ def deduplicate_catalog_records(records: List[Dict[str, Any]]):
     cleaned_rows = []
 
     for (supp_val, cont_val), group_rows in by_supp_content.items():
-        # Kelompokkan item berdasarkan angka nominal pecahan
-        nominal_groups = defaultdict(list)
+        # Kelompokkan item berdasarkan identitas produk kanonikal
+        product_groups = defaultdict(list)
 
         for row in group_rows:
-            item_text = str(row.get(item_key, "") or "").lower().strip()
-            nominal = get_item_nominal(item_text)
-            if nominal:
-                nominal_groups[nominal].append(row)
-            else:
-                nominal_groups[item_text].append(row)
+            product_key = get_universal_product_key(row, item_key, desc_key)
+            product_groups[product_key].append(row)
 
-        # Pilih 1 baris terbaik yang bersih untuk setiap nominal pecahan
-        for nominal_key, candidate_rows in nominal_groups.items():
+        # Pilih 1 baris terbaik yang bersih untuk setiap produk unik
+        for product_key, candidate_rows in product_groups.items():
             best_row = choose_best_catalog_item(candidate_rows, cont_val, item_key, desc_key or "")
             cleaned_rows.append([best_row.get(col_name) for col_name in original_cols])
 
