@@ -15,7 +15,8 @@ def is_catalog_dataset(sample_record: Dict[str, Any]) -> bool:
 
 # Deduplikasi varian item per supplier untuk seluruh baris data (Opsi A)
 def deduplicate_catalog_records(records: List[Dict[str, Any]]):
-    groups = {}
+    from collections import defaultdict
+
     original_cols = [str(k) for k in records[0].keys() if not str(k).startswith("_")]
 
     # Standarisasi nama kolom header agar selalu rapi: ID, Content, Item, Description, Supplier
@@ -40,26 +41,55 @@ def deduplicate_catalog_records(records: List[Dict[str, Any]]):
     content_key = next((k for k in original_cols if "content" in str(k).lower().strip() or "game" in str(k).lower().strip()), None)
     desc_key = next((k for k in original_cols if "description" in str(k).lower().strip() or "desc" in str(k).lower().strip()), None)
 
+    # Kelompokkan per (Supplier, Content) agar supplier berbeda tidak pernah tercampur
+    by_supp_content = defaultdict(list)
     for row_item in records:
         supp_val = str(row_item.get(supplier_key, "") or "").strip().lower() if supplier_key else ""
         cont_val = str(row_item.get(content_key, "") or "").strip().lower() if content_key else ""
-        desc_val = str(row_item.get(desc_key, "") or "").strip().lower() if desc_key else ""
-
-        # Kunci keunikan: Supplier + Content + Description
-        group_key = (supp_val, cont_val, desc_val)
-        if group_key not in groups:
-            groups[group_key] = []
-        groups[group_key].append(row_item)
+        by_supp_content[(supp_val, cont_val)].append(row_item)
 
     cleaned_rows = []
-    for group_key, rows_in_group in groups.items():
-        if len(rows_in_group) == 1:
-            base_row = rows_in_group[0]
-        else:
-            # Ambil item dasar (terpendek tanpa suffix promo tambahan)
-            sorted_rows = sorted(rows_in_group, key=lambda r: len(str(r.get(item_key, "") or "")))
-            base_row = sorted_rows[0]
-        cleaned_rows.append([base_row.get(col_name) for col_name in original_cols])
+
+    for (supp_val, cont_val), group_rows in by_supp_content.items():
+        # Urutkan baris: item terpendek tanpa underscore promo diprioritaskan sebagai base item
+        sorted_rows = sorted(
+            group_rows,
+            key=lambda r: (
+                len(str(r.get(item_key, "") or "")),
+                "_" in str(r.get(item_key, "") or ""),
+                len(str(r.get(desc_key, "") or ""))
+            )
+        )
+
+        clusters = []
+
+        for row in sorted_rows:
+            item_code = str(row.get(item_key, "") or "").lower().strip()
+            desc_text = str(row.get(desc_key, "") or "").lower().strip() if desc_key else ""
+            matched = False
+
+            for cluster in clusters:
+                base_row = cluster[0]
+                base_code = str(base_row.get(item_key, "") or "").lower().strip()
+                base_desc = str(base_row.get(desc_key, "") or "").lower().strip() if desc_key else ""
+
+                # 1. Item code adalah varian dengan suffix (misal: aov_90_disc, aov_90_promoupoint -> base: aov_90)
+                is_suffix_variant = (item_code == base_code or item_code.startswith(base_code + "_"))
+
+                # 2. Deskripsi sama persis dalam supplier + content yang sama
+                is_same_description = bool(desc_text and desc_text == base_desc)
+
+                if is_suffix_variant or is_same_description:
+                    cluster[1].append(row)
+                    matched = True
+                    break
+
+            if not matched:
+                clusters.append([row, [row]])
+
+        for cluster in clusters:
+            base_row = cluster[0]
+            cleaned_rows.append([base_row.get(col_name) for col_name in original_cols])
 
     return display_cols, cleaned_rows
 
