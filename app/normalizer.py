@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import io
 from typing import Dict, List, Any, Optional
 import openpyxl
@@ -12,6 +13,51 @@ def is_catalog_dataset(sample_record: Dict[str, Any]) -> bool:
     has_item = any("item" in k for k in keys_lower)
     has_supplier = any("supplier" in k or "vendor" in k for k in keys_lower)
     return has_item and has_supplier
+
+# Ambil angka nominal pecahan item (contoh: "freefire_140" -> "140", "mkios_5_diamonds" -> "5")
+def get_item_nominal(item_text: Any) -> str:
+    numbers = re.findall(r"\d+", str(item_text or ""))
+    if numbers:
+        return numbers[0]
+    return ""
+
+# Pilih baris item terbaik dari kumpulan kandidat varian yang sama
+def choose_best_catalog_item(candidate_rows: List[Dict[str, Any]], game_name: str, item_key: str, desc_key: str) -> Dict[str, Any]:
+    best_item = candidate_rows[0]
+
+    for current_row in candidate_rows:
+        current_desc = str(current_row.get(desc_key, "") or "").strip()
+        best_desc = str(best_item.get(desc_key, "") or "").strip()
+
+        current_name = str(current_row.get(item_key, "") or "").lower().strip()
+        best_name = str(best_item.get(item_key, "") or "").lower().strip()
+
+        # 1. Prioritaskan baris yang memiliki deskripsi lengkap (bukan kosong/tanda strip)
+        has_current_desc = bool(current_desc and current_desc != "-")
+        has_best_desc = bool(best_desc and best_desc != "-")
+
+        if has_current_desc and not has_best_desc:
+            best_item = current_row
+            continue
+        elif not has_current_desc and has_best_desc:
+            continue
+
+        # 2. Prioritaskan nama item yang mengandung nama game (contoh: "freefire_5" lebih utama dari "mkios_5")
+        clean_game = game_name.replace("_", "").lower()
+        current_has_game = clean_game in current_name.replace("_", "")
+        best_has_game = clean_game in best_name.replace("_", "")
+
+        if current_has_game and not best_has_game:
+            best_item = current_row
+            continue
+        elif not current_has_game and best_has_game:
+            continue
+
+        # 3. Pilih kode item yang lebih pendek dan bersih
+        if len(current_name) < len(best_name):
+            best_item = current_row
+
+    return best_item
 
 # Deduplikasi varian item per supplier untuk seluruh baris data (Opsi A)
 def deduplicate_catalog_records(records: List[Dict[str, Any]]):
@@ -41,7 +87,7 @@ def deduplicate_catalog_records(records: List[Dict[str, Any]]):
     content_key = next((k for k in original_cols if "content" in str(k).lower().strip() or "game" in str(k).lower().strip()), None)
     desc_key = next((k for k in original_cols if "description" in str(k).lower().strip() or "desc" in str(k).lower().strip()), None)
 
-    # Kelompokkan per (Supplier, Content) agar supplier berbeda tidak pernah tercampur
+    # Kelompokkan per (Supplier, Content) agar supplier dan game berbeda tidak pernah tercampur
     by_supp_content = defaultdict(list)
     for row_item in records:
         supp_val = str(row_item.get(supplier_key, "") or "").strip().lower() if supplier_key else ""
@@ -51,45 +97,21 @@ def deduplicate_catalog_records(records: List[Dict[str, Any]]):
     cleaned_rows = []
 
     for (supp_val, cont_val), group_rows in by_supp_content.items():
-        # Urutkan baris: item terpendek tanpa underscore promo diprioritaskan sebagai base item
-        sorted_rows = sorted(
-            group_rows,
-            key=lambda r: (
-                len(str(r.get(item_key, "") or "")),
-                "_" in str(r.get(item_key, "") or ""),
-                len(str(r.get(desc_key, "") or ""))
-            )
-        )
+        # Kelompokkan item berdasarkan angka nominal pecahan
+        nominal_groups = defaultdict(list)
 
-        clusters = []
+        for row in group_rows:
+            item_text = str(row.get(item_key, "") or "").lower().strip()
+            nominal = get_item_nominal(item_text)
+            if nominal:
+                nominal_groups[nominal].append(row)
+            else:
+                nominal_groups[item_text].append(row)
 
-        for row in sorted_rows:
-            item_code = str(row.get(item_key, "") or "").lower().strip()
-            desc_text = str(row.get(desc_key, "") or "").lower().strip() if desc_key else ""
-            matched = False
-
-            for cluster in clusters:
-                base_row = cluster[0]
-                base_code = str(base_row.get(item_key, "") or "").lower().strip()
-                base_desc = str(base_row.get(desc_key, "") or "").lower().strip() if desc_key else ""
-
-                # 1. Item code adalah varian dengan suffix (misal: aov_90_disc, aov_90_promoupoint -> base: aov_90)
-                is_suffix_variant = (item_code == base_code or item_code.startswith(base_code + "_"))
-
-                # 2. Deskripsi sama persis dalam supplier + content yang sama
-                is_same_description = bool(desc_text and desc_text == base_desc)
-
-                if is_suffix_variant or is_same_description:
-                    cluster[1].append(row)
-                    matched = True
-                    break
-
-            if not matched:
-                clusters.append([row, [row]])
-
-        for cluster in clusters:
-            base_row = cluster[0]
-            cleaned_rows.append([base_row.get(col_name) for col_name in original_cols])
+        # Pilih 1 baris terbaik yang bersih untuk setiap nominal pecahan
+        for nominal_key, candidate_rows in nominal_groups.items():
+            best_row = choose_best_catalog_item(candidate_rows, cont_val, item_key, desc_key or "")
+            cleaned_rows.append([best_row.get(col_name) for col_name in original_cols])
 
     return display_cols, cleaned_rows
 
@@ -102,7 +124,7 @@ def normalize_dataset(records: List[Dict[str, Any]]) -> Dict[str, Any]:
     model_name = get_llm_model()
     sample_records = records[:50]
 
-    # KASUS 1: Dataset Katalog Varian Item (Opsi A: Bersihkan varian suffix per supplier)
+    # KASUS 1: Dataset Katalog Varian Item
     if records and is_catalog_dataset(records[0]):
         original_cols = [str(k) for k in records[0].keys() if not str(k).startswith("_")]
 
