@@ -67,5 +67,34 @@ class TestMultiSheetHarmonization(unittest.TestCase):
         )
         self.assertGreater(len(export_res.content), 1000)
 
+    def test_catalog_variant_deduplication(self):
+        catalog_records = [
+            {"ID": 33, "Content": "arena_of_valor", "Item": "aov_1430", "Description": "AOV 1430 Vouchers", "Supplier": "garena"},
+            {"ID": 1444, "Content": "arena_of_valor", "Item": "aov_1430_dg_gpy", "Description": "AOV 1430 Vouchers", "Supplier": "garena"},
+            {"ID": 2056, "Content": "arena_of_valor", "Item": "aov_1430_dg_spend", "Description": "AOV 1430 Vouchers", "Supplier": "garena"},
+            {"ID": 5001, "Content": "arena_of_valor", "Item": "aov_1430", "Description": "AOV 1430 Vouchers", "Supplier": "coda"},
+            {"ID": 4, "Content": "arena_of_valor", "Item": "aov_18", "Description": "AOV 18 Voucher", "Supplier": "garena"}
+        ]
+
+        res = self.client.post("/api/normalize", json={"records": catalog_records})
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["status"], "success")
+        self.assertEqual(len(data["tables"]), 1)
+        
+        clean_table = data["tables"][0]
+        self.assertEqual(clean_table["table_name"], "Tabel Bersih")
+        # 3 varian aov_1430 garena harus melebur jadi 1, coda tetap 1, aov_18 tetap 1 (Total: 3 baris)
+        self.assertEqual(len(clean_table["rows"]), 3)
+
+        # Baris pertama harus base item 'aov_1430' dari 'garena'
+        garena_1430 = [r for r in clean_table["rows"] if r[2] == "aov_1430" and r[4] == "garena"]
+        self.assertEqual(len(garena_1430), 1)
+        self.assertEqual(garena_1430[0][0], 33)
+
+        # Baris coda tetap ada
+        coda_1430 = [r for r in clean_table["rows"] if r[2] == "aov_1430" and r[4] == "coda"]
+        self.assertEqual(len(coda_1430), 1)
+
 if __name__ == "__main__":
     unittest.main()
