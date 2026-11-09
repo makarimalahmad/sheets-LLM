@@ -8,7 +8,7 @@ from app.mapper import get_llm_client, get_llm_model
 
 # Cek apakah dataset berupa katalog item (Content, Item, Description, Supplier, ID)
 def is_catalog_dataset(sample_record: Dict[str, Any]) -> bool:
-    keys_lower = [str(k).lower().strip() for k in sample_record.keys()]
+    keys_lower = [str(k).lower().strip() for k in sample_record.keys() if not str(k).startswith("_")]
     has_item = any("item" in k for k in keys_lower)
     has_supplier = any("supplier" in k or "vendor" in k for k in keys_lower)
     return has_item and has_supplier
@@ -16,7 +16,7 @@ def is_catalog_dataset(sample_record: Dict[str, Any]) -> bool:
 # Deduplikasi varian item per supplier untuk seluruh baris data (Opsi A)
 def deduplicate_catalog_records(records: List[Dict[str, Any]]) -> List[List[Any]]:
     groups = {}
-    original_cols = list(records[0].keys())
+    original_cols = [str(k) for k in records[0].keys() if not str(k).startswith("_")]
     item_key = next((k for k in original_cols if str(k).lower().strip() == "item"), "Item")
     supplier_key = next((k for k in original_cols if "supplier" in str(k).lower().strip() or "vendor" in str(k).lower().strip()), "Supplier")
     content_key = next((k for k in original_cols if "content" in str(k).lower().strip() or "game" in str(k).lower().strip()), "Content")
@@ -56,7 +56,7 @@ def normalize_dataset(records: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     # KASUS 1: Dataset Katalog Varian Item (Opsi A: Bersihkan varian suffix per supplier)
     if records and is_catalog_dataset(records[0]):
-        original_cols = list(records[0].keys())
+        original_cols = [str(k) for k in records[0].keys() if not str(k).startswith("_")]
 
         prompt = f"""Kamu adalah AI pembersih dan penormalisasi data katalog item spreadsheet.
 Diberikan baris data denormalisasi (banyak duplikat varian dan suffix promo):

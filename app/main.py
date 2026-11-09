@@ -38,21 +38,27 @@ app.add_middleware(
 LATEST_MEMORY_DATA: Dict[str, Any] = {}
 LATEST_NORMALIZED_DATA: Dict[str, Any] = {}
 
-# Ubah teks angka atau mata uang menjadi float
+# Ubah teks angka atau mata uang menjadi float/int, pertahankan teks kode dan deskripsi
 def parse_cell_value(val: Any) -> Any:
     if val is None:
         return None
     if isinstance(val, (int, float)):
-        return float(val)
+        return val
     text_value = str(val).strip()
     if not text_value:
         return None
 
-    # Hapus awalan mata uang seperti Rp, Rp., IDR
-    text_value = re.sub(r"^(rp\.?|idr)\s*", "", text_value, flags=re.IGNORECASE).strip()
+    # Hapus awalan mata uang seperti Rp, Rp., IDR dan simbol persen di ujung
+    text_no_currency = re.sub(r"^(rp\.?|idr)\s*", "", text_value, flags=re.IGNORECASE).strip()
+    text_no_currency = re.sub(r"%\s*$", "", text_no_currency).strip()
+
+    # Jika mengandung huruf alfabet atau underscore (seperti aov_1430, 1990 Shifting Flowers, aether_gazer_1990),
+    # maka ini PASTI teks/kode SKU/deskripsi, BUKAN angka!
+    if re.search(r"[a-zA-Z_]", text_no_currency):
+        return text_value
 
     # Saring karakter angka, koma, titik, dan minus
-    cleaned_text = re.sub(r"[^\d.,\-]", "", text_value)
+    cleaned_text = re.sub(r"[^\d.,\-]", "", text_no_currency)
     if not cleaned_text or not any(char.isdigit() for char in cleaned_text):
         return text_value
 
@@ -80,7 +86,10 @@ def parse_cell_value(val: Any) -> Any:
             cleaned_text = cleaned_text.replace(",", ".")
 
     try:
-        return float(cleaned_text)
+        val_float = float(cleaned_text)
+        if val_float.is_integer() and "." not in cleaned_text and "," not in cleaned_text:
+            return int(val_float)
+        return val_float
     except ValueError:
         return text_value
 
@@ -209,8 +218,16 @@ async def pull_google_sheets(req: PullGoogleSheetsRequest):
 
                     reader = list(csv.reader(io.StringIO(csv_text)))
                     if len(reader) >= 2:
-                        headers = [str(column_name).strip() for column_name in reader[0]]
-                        rows = reader[1:]
+                        # Cari baris header yang sebenarnya (baris pertama dengan >= 2 kolom non-kosong)
+                        header_index = 0
+                        for row_index, raw_row in enumerate(reader[:5]):
+                            non_empty_cells = [str(c).strip() for c in raw_row if str(c).strip()]
+                            if len(non_empty_cells) >= 2:
+                                header_index = row_index
+                                break
+
+                        headers = [str(column_name).strip() for column_name in reader[header_index] if str(column_name).strip()]
+                        rows = reader[header_index + 1:]
                         sheets_payload.append(SingleSheetPayload(sheet_name=tab, headers=headers, rows=rows))
             except Exception:
                 continue
