@@ -104,6 +104,19 @@ def get_universal_product_key(row_item: Dict[str, Any], item_key: str, desc_key:
 
     return clean_item if clean_item else item_text
 
+# Cek apakah suatu baris adalah item uji coba/sampah (contoh: rom_test, laplace_test, cod_test, rox_test)
+def is_junk_test_item(row_item: Dict[str, Any], item_key: str, desc_key: Optional[str]) -> bool:
+    item_str = str(row_item.get(item_key, "") or "").lower().strip()
+    desc_str = str(row_item.get(desc_key, "") or "").lower().strip() if desc_key else ""
+
+    # Cek kata test di nama item atau deskripsi
+    has_test_word = bool(re.search(r"\btest\b|_test\b|testitem|test_item|item_test|item test|^[a-z]+test$", item_str)) or ("test" in desc_str)
+    if has_test_word:
+        # Jika deskripsinya kosong, tanda strip '-', atau deskripsinya eksplisit bertuliskan kata test -> SAMPAH!
+        if not desc_str or desc_str in ["-", "none", ""] or ("test" in desc_str):
+            return True
+    return False
+
 # Pilih baris item terbaik dari kumpulan kandidat varian yang sama
 def choose_best_catalog_item(candidate_rows: List[Dict[str, Any]], game_name: str, item_key: str, desc_key: str) -> Dict[str, Any]:
     clean_game = game_name.replace("_", "").lower()
@@ -112,12 +125,24 @@ def choose_best_catalog_item(candidate_rows: List[Dict[str, Any]], game_name: st
         desc = str(row_candidate.get(desc_key, "") or "").strip()
         item = str(row_candidate.get(item_key, "") or "").strip().lower()
 
-        has_desc = 10 if (desc and desc != "-" and desc.lower() != "none") else 0
-        has_game_name = 5 if clean_game in item.replace("_", "") else 0
-        is_promo = 1 if any(p in item for p in ["promo", "disc", "spend", "gpy", "tact", "restac", "ewl", "mager", "dg_"]) else 0
-        is_clean_base = 2 if item.startswith(("freefire_", "aov_", "cod_", "nontelco_", "v2_mlbb_")) else 0
+        # Prioritas 1: Punya deskripsi lengkap (bukan kosong/None/strip)
+        has_desc = 20 if (desc and desc not in ["-", "none", ""]) else 0
 
-        return (has_desc, -is_promo, is_clean_base, has_game_name, -len(item))
+        # Prioritas 2: Hindari nama item yang memiliki akhiran promo/distributor/channel
+        has_promo_suffix = 1 if any(tag in item for tag in [
+            "idv", "ndione", "ndispecial", "ndityp", "new26", "newioh", "dg_", "dgspend", "dgtp",
+            "disc", "promo", "spend", "tact", "restac", "ewl", "mager", "ucnormal", "fita", "funpack",
+            "p_dg", "p_brandcom", "p_la", "p_blu", "bns", "free", "sktes"
+        ]) else 0
+
+        # Prioritas 3: Nama item yang bersih/standar (misal GROWTOPIA_ABUNDANCE lebih bagus dari GROWTOPIA_ABUNDANCE_idv)
+        is_clean_base = 5 if not has_promo_suffix else 0
+
+        # Prioritas 4: Nama item mengandung kata game jika relevan
+        has_game_name = 3 if clean_game in item.replace("_", "") else 0
+
+        # Prioritas 5: Lebih pendek lebih bagus
+        return (has_desc, is_clean_base, -has_promo_suffix, has_game_name, -len(item))
 
     sorted_candidates = sorted(candidate_rows, key=score_row, reverse=True)
     return sorted_candidates[0]
@@ -150,9 +175,12 @@ def deduplicate_catalog_records(records: List[Dict[str, Any]]):
     content_key = next((k for k in original_cols if "content" in str(k).lower().strip() or "game" in str(k).lower().strip()), None)
     desc_key = next((k for k in original_cols if "description" in str(k).lower().strip() or "desc" in str(k).lower().strip()), None)
 
+    # Filter buang baris test sampah terlebih dahulu
+    clean_input_records = [r for r in records if not is_junk_test_item(r, item_key, desc_key)]
+
     # Kelompokkan per (Supplier, Content) agar supplier dan game berbeda tidak pernah tercampur
     by_supp_content = defaultdict(list)
-    for row_item in records:
+    for row_item in clean_input_records:
         supp_val = str(row_item.get(supplier_key, "") or "").strip().lower() if supplier_key else ""
         cont_val = str(row_item.get(content_key, "") or "").strip().lower() if content_key else ""
         by_supp_content[(supp_val, cont_val)].append(row_item)
