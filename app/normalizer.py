@@ -100,10 +100,19 @@ def is_promo_item(item_name: str) -> bool:
     return False
 
 # Pilih baris item terbaik dari kumpulan kandidat varian yang sama
-def pick_best_row(row_list: List[Dict[str, Any]], item_key: str, desc_key: Optional[str]) -> Dict[str, Any]:
+def pick_best_row(row_list: List[Dict[str, Any]], item_key: str, desc_key: Optional[str], code_key: Optional[str] = None) -> Dict[str, Any]:
     best_row = row_list[0]
 
     for current_row in row_list:
+        # Prioritas 0: Pilih yang memiliki Code resmi terisi jika ada kolom Code
+        current_code = str(current_row.get(code_key, "") or "").strip() if code_key else ""
+        best_code = str(best_row.get(code_key, "") or "").strip() if code_key else ""
+        if current_code and not best_code:
+            best_row = current_row
+            continue
+        elif not current_code and best_code:
+            continue
+
         current_desc = str(current_row.get(desc_key, "") or "").strip()
         best_desc = str(best_row.get(desc_key, "") or "").strip()
         current_item = str(current_row.get(item_key, "") or "").strip().lower()
@@ -138,7 +147,7 @@ def deduplicate_catalog_records(records: List[Dict[str, Any]]):
 
     original_cols = [str(k) for k in records[0].keys() if not str(k).startswith("_")]
 
-    # Standarisasi nama kolom header: ID, Content, Item, Description, Supplier
+    # Standarisasi nama kolom header: ID, Content, Item, Code, Description, Supplier
     display_cols = []
     for col_name in original_cols:
         col_lower = col_name.lower().replace("_", " ").strip()
@@ -148,6 +157,8 @@ def deduplicate_catalog_records(records: List[Dict[str, Any]]):
             display_cols.append("Content")
         elif "item" in col_lower:
             display_cols.append("Item")
+        elif "code" in col_lower or "sku" in col_lower:
+            display_cols.append("Code")
         elif "desc" in col_lower:
             display_cols.append("Description")
         elif "supplier" in col_lower or "vendor" in col_lower:
@@ -160,6 +171,7 @@ def deduplicate_catalog_records(records: List[Dict[str, Any]]):
     supplier_key = None
     content_key = None
     desc_key = None
+    code_key = None
 
     for col in original_cols:
         col_clean = str(col).lower().strip()
@@ -171,6 +183,8 @@ def deduplicate_catalog_records(records: List[Dict[str, Any]]):
             content_key = col
         elif "description" in col_clean or "desc" in col_clean:
             desc_key = col
+        elif "code" in col_clean or "sku" in col_clean:
+            code_key = col
 
     # 1. Kelompokkan per (Supplier, Content, Kunci Produk)
     groups = defaultdict(list)
@@ -184,14 +198,20 @@ def deduplicate_catalog_records(records: List[Dict[str, Any]]):
 
         supp = str(row.get(supplier_key, "") or "").strip().lower() if supplier_key else ""
         cont = str(row.get(content_key, "") or "").strip().lower() if content_key else ""
-        prod_key = get_product_key(item_val, desc_val)
+
+        # Jika ada kolom Code dan terisi, utamakan Code sebagai kunci produk resmi
+        code_val = str(row.get(code_key, "") or "").strip().lower() if code_key else ""
+        if code_val and code_val not in ["-", "none", ""]:
+            prod_key = f"code_{code_val}"
+        else:
+            prod_key = get_product_key(item_val, desc_val)
 
         groups[(supp, cont, prod_key)].append(row)
 
     # 2. Ambil 1 baris terbersih untuk setiap produk unik
     cleaned_rows = []
     for (supp, cont, prod_key), row_list in groups.items():
-        best_row = pick_best_row(row_list, item_key, desc_key)
+        best_row = pick_best_row(row_list, item_key, desc_key, code_key)
         cleaned_rows.append([best_row.get(col_name) for col_name in original_cols])
 
     return display_cols, cleaned_rows
