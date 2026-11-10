@@ -203,7 +203,7 @@ def normalize_dataset(records: List[Dict[str, Any]]) -> Dict[str, Any]:
         raise ValueError("Variabel LLM_API_KEY belum disetel di file .env")
 
     model_name = get_llm_model()
-    sample_records = records[:50]
+    sample_records = records[:15]
 
     # KASUS 1: Dataset Katalog Varian Item
     if records and is_catalog_dataset(records[0]):
