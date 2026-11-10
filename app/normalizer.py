@@ -132,13 +132,13 @@ def pick_best_row(row_list: List[Dict[str, Any]], item_key: str, desc_key: Optio
 
     return best_row
 
-# Deduplikasi varian item per supplier untuk seluruh baris data (Opsi A)
+# Deduplikasi varian item per supplier untuk seluruh baris data
 def deduplicate_catalog_records(records: List[Dict[str, Any]]):
     from collections import defaultdict
 
     original_cols = [str(k) for k in records[0].keys() if not str(k).startswith("_")]
 
-    # Standarisasi nama kolom header agar selalu rapi: ID, Content, Item, Description, Supplier
+    # Standarisasi nama kolom header: ID, Content, Item, Description, Supplier
     display_cols = []
     for col_name in original_cols:
         col_lower = col_name.lower().replace("_", " ").strip()
