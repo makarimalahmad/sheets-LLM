@@ -51,10 +51,11 @@ def get_product_key(item_text: Any, desc_text: Any) -> str:
     # Ambil angka nominal dari Description jika ada (Description adalah nama produk resmi)
     if desc and desc not in ["-", "none", ""]:
         d_clean = re.sub(r"\(.*?\)", "", desc)
-        # Jika ada format bonus penjumlahan (misal 11+1 Diamonds -> 12)
+        # Jika ada format bonus penjumlahan (misal: 11+1 Diamonds -> 12, 1580+110 Bonds -> 1690)
         plus_match = re.search(r"(\d+)\s*\+\s*(\d+)", d_clean)
-        if plus_match and int(plus_match.group(1)) in [11, 25, 53, 77, 154, 256, 367, 503, 774]:
-            return f"denom_{int(plus_match.group(1)) + int(plus_match.group(2))}"
+        if plus_match:
+            total_nominal = int(plus_match.group(1)) + int(plus_match.group(2))
+            return f"denom_{total_nominal}"
 
         d_clean = re.sub(r"\+.*", "", d_clean)
         d_clean = re.sub(r"\b(funpack|langganan|fita|promo|blanja|vcr|voucher|disc)\b", "", d_clean)
@@ -73,11 +74,11 @@ def get_product_key(item_text: Any, desc_text: Any) -> str:
     clean_item = re.sub(r"^(mlbb_|freefire_|aov_|cod_|rom_)", "", clean_item)
     clean_item = re.sub(r"(_diamonds|_diamond|_voucher|_vcr|_disc.*|_promo.*|_dg.*|_ndione|_ndispecial|_new\d*|_tact|_restac|_fntch|_rv_s|_ioh|_idv|_mytsel|_bns.*|_promoupoint|_funpack.*|_fita.*)$", "", clean_item)
 
-    # Deteksi combo item: DTU_MLBB_11_1 -> 12
+    # Deteksi combo item: DTU_MLBB_11_1 -> 12 (angka kedua adalah bonus wajar <= 300)
     combo_match = re.search(r"(\d+)_(\d+)", clean_item)
     if combo_match:
         v1, v2 = int(combo_match.group(1)), int(combo_match.group(2))
-        if v1 in [11, 25, 53, 77, 154, 256, 367, 503, 774]:
+        if v2 <= 300:
             return f"denom_{v1 + v2}"
 
     nums = re.findall(r"\d+", clean_item)
