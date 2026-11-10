@@ -9,18 +9,27 @@ from app.mapper import get_llm_client, get_llm_model
 
 # Cek apakah dataset berupa katalog item (Content, Item, Description, Supplier, ID)
 def is_catalog_dataset(sample_record: Dict[str, Any]) -> bool:
-    keys_lower = [str(k).lower().strip() for k in sample_record.keys() if not str(k).startswith("_")]
-    has_item = any("item" in k for k in keys_lower)
-    has_supplier = any("supplier" in k or "vendor" in k for k in keys_lower)
+    has_item = False
+    has_supplier = False
+
+    for col in sample_record.keys():
+        col_name = str(col).lower()
+        if "item" in col_name:
+            has_item = True
+        if "supplier" in col_name or "vendor" in col_name:
+            has_supplier = True
+
     return has_item and has_supplier
 
 # Cek apakah item adalah data uji coba / sampah (contoh: rom_test, laplace_test, cod_test)
 def is_test_item(item_text: Any, desc_text: Any) -> bool:
     item = str(item_text or "").lower().strip()
     desc = str(desc_text or "").lower().strip()
+
     if "test" in item or "test" in desc:
-        if not desc or desc in ["-", "none", ""] or "test" in desc:
+        if desc == "" or desc == "-" or desc == "none" or "test" in desc:
             return True
+
     return False
 
 # Ekstraksi identitas produk/denominasi kanonikal secara universal
@@ -79,6 +88,14 @@ def get_product_key(item_text: Any, desc_text: Any) -> str:
 
     return clean_item if clean_item else item
 
+# Fungsi pembantu untuk memeriksa apakah nama item mengandung kata promo atau channel
+def is_promo_item(item_name: str) -> bool:
+    promo_tags = ["promo", "disc", "spend", "gpy", "tact", "funpack", "fita", "cstm", "ctm", "dtu_", "mkios_"]
+    for tag in promo_tags:
+        if tag in item_name:
+            return True
+    return False
+
 # Pilih baris item terbaik dari kumpulan kandidat varian yang sama
 def pick_best_row(row_list: List[Dict[str, Any]], item_key: str, desc_key: Optional[str]) -> Dict[str, Any]:
     best_row = row_list[0]
@@ -97,8 +114,8 @@ def pick_best_row(row_list: List[Dict[str, Any]], item_key: str, desc_key: Optio
             continue
 
         # Prioritas 2: Hindari nama yang mengandung kata promo atau channel distributor
-        current_is_promo = any(tag in current_item for tag in ["promo", "disc", "spend", "gpy", "tact", "funpack", "fita", "cstm", "ctm", "dtu_", "mkios_"])
-        best_is_promo = any(tag in best_item for tag in ["promo", "disc", "spend", "gpy", "tact", "funpack", "fita", "cstm", "ctm", "dtu_", "mkios_"])
+        current_is_promo = is_promo_item(current_item)
+        best_is_promo = is_promo_item(best_item)
 
         if not current_is_promo and best_is_promo:
             best_row = current_row
@@ -135,10 +152,22 @@ def deduplicate_catalog_records(records: List[Dict[str, Any]]):
         else:
             display_cols.append(col_name)
 
-    item_key = next((k for k in original_cols if "item" in str(k).lower().strip()), original_cols[0])
-    supplier_key = next((k for k in original_cols if "supplier" in str(k).lower().strip() or "vendor" in str(k).lower().strip()), None)
-    content_key = next((k for k in original_cols if "content" in str(k).lower().strip() or "game" in str(k).lower().strip()), None)
-    desc_key = next((k for k in original_cols if "description" in str(k).lower().strip() or "desc" in str(k).lower().strip()), None)
+    # Cari nama kolom yang cocok dengan loop sederhana
+    item_key = original_cols[0]
+    supplier_key = None
+    content_key = None
+    desc_key = None
+
+    for col in original_cols:
+        col_clean = str(col).lower().strip()
+        if "item" in col_clean:
+            item_key = col
+        elif "supplier" in col_clean or "vendor" in col_clean:
+            supplier_key = col
+        elif "content" in col_clean or "game" in col_clean:
+            content_key = col
+        elif "description" in col_clean or "desc" in col_clean:
+            desc_key = col
 
     # 1. Kelompokkan per (Supplier, Content, Kunci Produk)
     groups = defaultdict(list)
