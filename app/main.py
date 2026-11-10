@@ -176,15 +176,14 @@ def consolidate_multi_sheets(payload: MultiSheetConsolidateRequest):
 def get_latest_data():
     return LATEST_MEMORY_DATA
 
-# Tarik data dari link Google Sheets dan gabungkan langsung via AI
-@app.post("/api/pull-google-sheets", response_model=ConsolidatedDataset)
-async def pull_google_sheets(req: PullGoogleSheetsRequest):
-    raw_url = req.sheet_url.strip()
-    if "/d/" not in raw_url:
+# Fungsi pembantu untuk mengunduh data mentah dari link Google Sheets
+async def fetch_raw_sheets_payload(raw_url: str, tab_names: Optional[List[str]] = None) -> List[SingleSheetPayload]:
+    clean_url = raw_url.strip()
+    if "/d/" not in clean_url:
         raise HTTPException(status_code=400, detail="Link Google Sheets tidak valid. Harus mengandung /d/...")
 
     try:
-        sheet_id = raw_url.split("/d/")[1].split("/")[0]
+        sheet_id = clean_url.split("/d/")[1].split("/")[0]
     except Exception:
         raise HTTPException(status_code=400, detail="Gagal mengambil ID dari link Google Sheets")
 
@@ -201,7 +200,7 @@ async def pull_google_sheets(req: PullGoogleSheetsRequest):
             pass
 
         default_fallback_tabs = [f"Sheet{i}" for i in range(1, 21)]
-        target_tabs = req.tab_names or detected_tabs or default_fallback_tabs
+        target_tabs = tab_names or detected_tabs or default_fallback_tabs
 
         for tab in target_tabs:
             export_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={tab}"
@@ -218,7 +217,6 @@ async def pull_google_sheets(req: PullGoogleSheetsRequest):
 
                     reader = list(csv.reader(io.StringIO(csv_text)))
                     if len(reader) >= 2:
-                        # Cari baris header yang sebenarnya (baris pertama dengan >= 2 kolom non-kosong)
                         header_index = 0
                         for row_index, raw_row in enumerate(reader[:5]):
                             non_empty_cells = [str(c).strip() for c in raw_row if str(c).strip()]
@@ -238,9 +236,15 @@ async def pull_google_sheets(req: PullGoogleSheetsRequest):
             detail="Gagal membaca data dari link. Pastikan akses Google Sheets diatur ke 'Siapa saja yang memiliki link dapat melihat'."
         )
 
+    return sheets_payload
+
+# Tarik data dari link Google Sheets dan gabungkan langsung via AI (Fitur 1)
+@app.post("/api/pull-google-sheets", response_model=ConsolidatedDataset)
+async def pull_google_sheets(req: PullGoogleSheetsRequest):
+    sheets_payload = await fetch_raw_sheets_payload(req.sheet_url, req.tab_names)
     return consolidate_multi_sheets(MultiSheetConsolidateRequest(sheets=sheets_payload))
 
-# Normalisasikan data tabel menjadi tabel-tabel relasional (ERD) via AI
+# Normalisasikan data tabel menjadi tabel-tabel relasional (Fitur 2)
 @app.post("/api/normalize", response_model=NormalizedResponse)
 async def normalize_table_data(req: Optional[NormalizeRequest] = None):
     global LATEST_NORMALIZED_DATA
@@ -250,8 +254,15 @@ async def normalize_table_data(req: Optional[NormalizeRequest] = None):
     if req and req.records:
         records_to_normalize = req.records
     elif req and req.sheet_url:
-        consolidated = await pull_google_sheets(PullGoogleSheetsRequest(sheet_url=req.sheet_url))
-        records_to_normalize = consolidated.records
+        # Tarik data mentah secara langsung dengan nama kolom asli tanpa diubah AI Tab 1
+        raw_sheets = await fetch_raw_sheets_payload(req.sheet_url)
+        for sheet_item in raw_sheets:
+            for row in sheet_item.rows:
+                record: Dict[str, Any] = {"_source_sheet": sheet_item.sheet_name}
+                for col_index, col_name in enumerate(sheet_item.headers):
+                    if col_index < len(row):
+                        record[col_name] = parse_cell_value(row[col_index])
+                records_to_normalize.append(record)
     elif LATEST_MEMORY_DATA and LATEST_MEMORY_DATA.get("records"):
         records_to_normalize = LATEST_MEMORY_DATA.get("records", [])
 
