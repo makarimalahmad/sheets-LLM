@@ -65,11 +65,13 @@ def get_product_key(item_text: Any, desc_text: Any) -> str:
             elif num_val == "282": num_val = "296"
             elif num_val == "56": num_val = "59"
             return f"denom_{num_val}"
+        else:
+            return d_clean.strip()
 
     # Jika Description kosong atau tidak ada angka, cari angka dari nama Item
     clean_item = re.sub(r"^(dgd_|v\d+_|v\d+-|np_|mkios_|nontelco_|dtu_|mcash_p_|promobl_|blanja-v\d+-|diamond_telkomselidr_|star_telkomselidr_)", "", item)
     clean_item = re.sub(r"^(mlbb_|freefire_|aov_|cod_|rom_)", "", clean_item)
-    clean_item = re.sub(r"(_diamonds|_diamond|_voucher|_vcr|_disc.*|_promo.*|_dg.*|_ndione|_new\d*|_tact|_restac|_fntch|_rv_s|_ioh|_idv|_mytsel|_bns.*|_promoupoint|_funpack.*|_fita.*)$", "", clean_item)
+    clean_item = re.sub(r"(_diamonds|_diamond|_voucher|_vcr|_disc.*|_promo.*|_dg.*|_ndione|_ndispecial|_new\d*|_tact|_restac|_fntch|_rv_s|_ioh|_idv|_mytsel|_bns.*|_promoupoint|_funpack.*|_fita.*)$", "", clean_item)
 
     # Deteksi combo item: DTU_MLBB_11_1 -> 12
     combo_match = re.search(r"(\d+)_(\d+)", clean_item)
@@ -90,7 +92,7 @@ def get_product_key(item_text: Any, desc_text: Any) -> str:
 
 # Fungsi pembantu untuk memeriksa apakah nama item mengandung kata promo atau channel
 def is_promo_item(item_name: str) -> bool:
-    promo_tags = ["promo", "disc", "spend", "gpy", "tact", "funpack", "fita", "cstm", "ctm", "dtu_", "mkios_"]
+    promo_tags = ["promo", "disc", "spend", "gpy", "tact", "funpack", "fita", "cstm", "ctm", "dtu_", "mkios_", "ndispecial", "ndione"]
     for tag in promo_tags:
         if tag in item_name:
             return True
