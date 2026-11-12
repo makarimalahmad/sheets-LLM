@@ -110,5 +110,20 @@ class TestMultiSheetHarmonization(unittest.TestCase):
         self.assertEqual(len(ml_items), 1)
         self.assertEqual(ml_items[0][0], 74)
 
+    def test_compound_nominal_and_clean_base_priority(self):
+        from app.normalizer import deduplicate_catalog_records
+        rows = [
+            {"ID": 244, "Content": "ragnarok_mobile", "Item": "BCC120", "Code": "SKU_1057", "Description": "120 Big Cat Coins", "Supplier": "goc"},
+            {"ID": 232, "Content": "ragnarok_mobile", "Item": "BCC120_14", "Code": "SKU_1045", "Description": "120 Big Cat Coins + 14 Big Cat Coins", "Supplier": "goc"},
+            {"ID": 236, "Content": "ragnarok_mobile", "Item": "BCC120_30_30_22", "Code": "SKU_1049", "Description": "120Big Cat Coins+30Big Cat Coins+30Big Cat Coins+22Big Cat Coins", "Supplier": "goc"},
+            {"ID": 250, "Content": "arena_of_valor", "Item": "Promobl_230_Voucher", "Code": "SKU_AOV_230", "Description": "Promo Blanja AOV 230 Voucher", "Supplier": "garena"},
+            {"ID": 11, "Content": "arena_of_valor", "Item": "aov_230", "Code": "SKU_AOV_230", "Description": "AOV 230 Vouchers", "Supplier": "garena"}
+        ]
+        cols, clean = deduplicate_catalog_records(rows)
+        self.assertEqual(len(clean), 4)
+        aov_items = [r for r in clean if r[1] == "arena_of_valor"]
+        self.assertEqual(len(aov_items), 1)
+        self.assertEqual(aov_items[0][2], "aov_230")
+
 if __name__ == "__main__":
     unittest.main()

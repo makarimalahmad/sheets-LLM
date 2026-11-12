@@ -49,36 +49,43 @@ def get_product_key(item_text: Any, desc_text: Any) -> str:
     # Ambil angka nominal dari Description jika ada (Description adalah nama produk resmi)
     if desc and desc not in ["-", "none", ""]:
         d_clean = re.sub(r"\(.*?\)", "", desc)
-        # Cek jika ada format penjumlahan (misal: 1580 + 110) yang hasilnya cocok dengan nama Item
-        plus_match = re.search(r"(\d+)\s*\+\s*(\d+)", d_clean)
-        if plus_match:
-            total_sum = int(plus_match.group(1)) + int(plus_match.group(2))
-            if str(total_sum) in item:
-                unit_type = detect_currency_unit(f"{d_clean} {item}")
-                return f"denom_{total_sum}_{unit_type}" if unit_type else f"denom_{total_sum}"
-
-        # Buang tanda + dan semua teks bonus promo di belakangnya agar melebur ke base item
-        d_clean = re.sub(r"\+.*", "", d_clean)
         d_clean = re.sub(r"\b(funpack|langganan|fita|promo|blanja|vcr|voucher|disc)\b", "", d_clean)
         d_clean = re.sub(r"\s+", " ", d_clean).strip()
 
         # Jika deskripsi adalah paket/pass/durasi/multiplier (misal: x2, x3, Pass, Card, Hari),
         # jangan diubah menjadi denom_<angka> agar tidak bertabrakan dengan nominal murni (contoh: x3 != 3 Diamonds)
-        if re.search(r"\b(x\d+|pass|card|paket|bundle|fund|hari|days|bulan|minggu|plan|member|service|privilege|elite|monthly|weekly)\b", d_clean):
+        if re.search(r"\b(x\d+|pass|card|paket|bundle|bundling|fund|hari|days|bulan|minggu|plan|member|service|privilege|elite|monthly|weekly)\b", d_clean):
             return d_clean
 
+        # Jika ada format penjumlahan beberapa nominal mata uang sejenis (misal: 120 + 14 Big Cat Coins, 1580 + 110 Bonds)
+        if "+" in d_clean:
+            parts = d_clean.split("+")
+            nums_to_sum = []
+            for part in parts:
+                if not re.search(r"\b(plan|exercise|hari|days|mb|gb|fita|bonus)\b", part):
+                    found = re.findall(r"\d+(?:\.\d+)?", part)
+                    if found:
+                        nums_to_sum.append(float(found[-1]) if "." in found[-1] else int(found[-1]))
+            if len(nums_to_sum) >= 2:
+                total_sum = sum(nums_to_sum)
+                unit_type = detect_currency_unit(f"{d_clean} {item}")
+                return f"denom_{total_sum}_{unit_type}" if unit_type else f"denom_{total_sum}"
+
+        # Buang tanda + dan semua teks bonus promo di belakangnya agar melebur ke base item
+        d_no_plus = re.sub(r"\+.*", "", d_clean).strip()
+
         # Ambil angka paling kanan (nominal pecahan, bukan angka judul game seperti 'Honkai Impact 3') serta dukung angka desimal (1.3B, 10.4B)
-        nums = re.findall(r"\d+(?:\.\d+)?", d_clean)
+        nums = re.findall(r"\d+(?:\.\d+)?", d_no_plus)
         if nums:
             num_val = nums[-1]
             # Standarisasi alias nominal kembar (169 -> 170, 282 -> 296, 56 -> 59)
             if num_val == "169": num_val = "170"
             elif num_val == "282": num_val = "296"
             elif num_val == "56": num_val = "59"
-            unit_type = detect_currency_unit(f"{d_clean} {item}")
+            unit_type = detect_currency_unit(f"{d_no_plus} {item}")
             return f"denom_{num_val}_{unit_type}" if unit_type else f"denom_{num_val}"
         else:
-            return d_clean.strip()
+            return d_no_plus
 
     # Jika Description kosong atau tidak ada angka, cari angka dari nama Item
     clean_item = re.sub(r"^(dgd_|v\d+_|v\d+-|np_|mkios_|nontelco_|dtu_|mcash_p_|promobl_|blanja-v\d+-|diamond_telkomselidr_|star_telkomselidr_)", "", item)
@@ -120,7 +127,7 @@ def pick_best_row(
             if clean_word and clean_word not in unit_words:
                 unit_words.append(clean_word)
 
-    promo_tags = ["_wd", "_dmver", "_rv_", "_gpy", "_byu", "_isat", "_telco", "_ft_", "_upo", "_dg_", "_idv", "_bns", "_promo", "_disc", "_cstm", "_tact", "_restac", "upsell", "recharge", "funpack", "fita", "mkios_", "_data", "_digipos"]
+    promo_tags = ["_wd", "_dmver", "_rv_", "_gpy", "_byu", "_isat", "_telco", "_ft_", "_upo", "_dg_", "_idv", "_bns", "promo", "_disc", "_cstm", "_tact", "_restac", "upsell", "recharge", "funpack", "fita", "mkios_", "_data", "_digipos", "digicore", "dtu_", "_test", "_tes_"]
     if extra_promo_tags:
         for tag in extra_promo_tags:
             clean_tag = str(tag).lower().strip()
@@ -131,11 +138,11 @@ def pick_best_row(
         code_ada = bool(code_key and str(row.get(code_key, "") or "").strip() not in ["-", "none", ""])
         desc_ada = bool(desc_key and str(row.get(desc_key, "") or "").strip() not in ["-", "none", ""])
         item_str = str(row.get(item_key, "") or "").strip().lower()
-        nama_resmi = any(unit in item_str for unit in unit_words)
         bukan_promo = not any(tag in item_str for tag in promo_tags)
+        nama_resmi = any(unit in item_str for unit in unit_words)
 
-        # Urutan pemenang: Code resmi -> Ada deskripsi -> Nama satuan resmi -> Bukan promo -> Teks terpendek
-        return (code_ada, desc_ada, nama_resmi, bukan_promo, -len(item_str))
+        # Urutan pemenang: Code resmi -> Ada deskripsi -> Bukan promo/channel -> Nama satuan resmi -> Teks terpendek
+        return (code_ada, desc_ada, bukan_promo, nama_resmi, -len(item_str))
 
     return max(row_list, key=cek_prioritas)
 
