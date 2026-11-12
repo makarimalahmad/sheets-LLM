@@ -78,53 +78,22 @@ def get_product_key(item_text: Any, desc_text: Any) -> str:
 
     return clean_item if clean_item else item
 
-# 3. Hitung skor kebersihan nama item secara universal
-def get_item_cleanliness_score(row: Dict[str, Any], item_key: str, desc_key: Optional[str], code_key: Optional[str] = None) -> float:
-    desc = str(row.get(desc_key, "") or "").strip().lower() if desc_key else ""
-    item = str(row.get(item_key, "") or "").strip().lower()
-    code = str(row.get(code_key, "") or "").strip() if code_key else ""
-
-    score = 0.0
-
-    # Prioritaskan jika Code terisi resmi
-    if code and code not in ["-", "none", ""]:
-        score += 40.0
-
-    # Prioritaskan jika memiliki Deskripsi lengkap
-    if desc and desc not in ["-", "none", ""]:
-        score += 50.0
-
-    # Prioritaskan jika mengandung kata satuan mata uang resmi (diamond, voucher, bonds, robux, dll)
-    unit_words = ["diamond", "voucher", "bond", "coin", "crystal", "robux", "gold", "gem", "koin", "zeny", "flower", "pass", "card"]
-    for unit in unit_words:
-        if unit in item:
-            score += 20.0
-            if unit in desc:
-                score += 10.0
-            break
-
-    # Beri penalti jika mengandung singkatan channel / promo / vendor
-    vendor_tags = ["_wd", "_dmver", "_rv_", "_gpy", "_byu", "_isat", "_telco", "_ft_", "_upo", "_dg_", "_idv", "_bns", "_promo", "_disc", "_cstm", "_tact", "_restac", "upsell", "recharge", "funpack", "fita", "mkios_", "_data", "_digipos", "digipos"]
-    for tag in vendor_tags:
-        if tag in item:
-            score -= 15.0
-
-    # Nilai lebih untuk teks yang lebih ringkas
-    score -= len(item) * 0.1
-    return score
-
-# 4. Pilih baris item terbaik dari kumpulan kandidat varian yang sama
+# 3. Pilih baris item terbaik dari sekumpulan varian produk yang sama
 def pick_best_row(row_list: List[Dict[str, Any]], item_key: str, desc_key: Optional[str], code_key: Optional[str] = None) -> Dict[str, Any]:
-    best_row = row_list[0]
-    best_score = get_item_cleanliness_score(best_row, item_key, desc_key, code_key)
+    unit_words = ["diamond", "voucher", "bond", "coin", "crystal", "robux", "gold", "gem", "koin", "zeny", "flower", "pass", "card"]
+    promo_tags = ["_wd", "_dmver", "_rv_", "_gpy", "_byu", "_isat", "_telco", "_ft_", "_upo", "_dg_", "_idv", "_bns", "_promo", "_disc", "_cstm", "_tact", "_restac", "upsell", "recharge", "funpack", "fita", "mkios_", "_data", "_digipos"]
 
-    for current_row in row_list[1:]:
-        current_score = get_item_cleanliness_score(current_row, item_key, desc_key, code_key)
-        if current_score > best_score:
-            best_row = current_row
-            best_score = current_score
+    def cek_prioritas(row):
+        code_ada = bool(code_key and str(row.get(code_key, "") or "").strip() not in ["-", "none", ""])
+        desc_ada = bool(desc_key and str(row.get(desc_key, "") or "").strip() not in ["-", "none", ""])
+        item_str = str(row.get(item_key, "") or "").strip().lower()
+        nama_resmi = any(u in item_str for u in unit_words)
+        bukan_promo = not any(p in item_str for p in promo_tags)
 
-    return best_row
+        # Urutan pemenang: Code resmi -> Ada deskripsi -> Nama satuan resmi -> Bukan promo -> Teks terpendek
+        return (code_ada, desc_ada, nama_resmi, bukan_promo, -len(item_str))
+
+    return max(row_list, key=cek_prioritas)
 
 # 5. Deduplikasi varian item per supplier untuk seluruh baris data katalog
 def deduplicate_catalog_records(
