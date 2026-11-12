@@ -41,9 +41,10 @@ def get_product_key(item_text: Any, desc_text: Any) -> str:
         if re.search(r"\b(x\d+|pass|card|paket|bundle|fund|hari|days|bulan|minggu|plan|member|service|privilege|elite|monthly|weekly)\b", d_clean):
             return d_clean
 
-        nums = re.findall(r"\d+", d_clean)
+        # Ambil angka paling kanan (nominal pecahan, bukan angka judul game seperti 'Honkai Impact 3') serta dukung angka desimal (1.3B, 10.4B)
+        nums = re.findall(r"\d+(?:\.\d+)?", d_clean)
         if nums:
-            num_val = nums[0]
+            num_val = nums[-1]
             # Standarisasi alias nominal kembar (169 -> 170, 282 -> 296, 56 -> 59)
             if num_val == "169": num_val = "170"
             elif num_val == "282": num_val = "296"
