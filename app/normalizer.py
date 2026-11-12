@@ -199,10 +199,10 @@ def deduplicate_catalog_records(records: List[Dict[str, Any]]):
         supp = str(row.get(supplier_key, "") or "").strip().lower() if supplier_key else ""
         cont = str(row.get(content_key, "") or "").strip().lower() if content_key else ""
 
-        # Jika ada kolom Code dan terisi, utamakan Code sebagai kunci produk resmi
-        code_val = str(row.get(code_key, "") or "").strip().lower() if code_key else ""
-        if code_val and code_val not in ["-", "none", ""]:
-            prod_key = f"code_{code_val}"
+        # Jika ada kolom Code dan terisi, bersihkan Code sebagai kunci produk resmi
+        code_val = str(row.get(code_key, "") or "").strip() if code_key else ""
+        if code_val and code_val.lower() not in ["-", "none", ""]:
+            prod_key = get_product_key(code_val, desc_val)
         else:
             prod_key = get_product_key(item_val, desc_val)
 
