@@ -7,32 +7,16 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from app.mapper import get_llm_client, get_llm_model
 
-# Cek apakah dataset berupa katalog item (Content, Item, Description, Supplier, ID)
-def is_catalog_dataset(sample_record: Dict[str, Any]) -> bool:
-    has_item = False
-    has_supplier = False
-
-    for col in sample_record.keys():
-        col_name = str(col).lower()
-        if "item" in col_name:
-            has_item = True
-        if "supplier" in col_name or "vendor" in col_name:
-            has_supplier = True
-
-    return has_item and has_supplier
-
-# Cek apakah item adalah data uji coba / sampah (contoh: rom_test, laplace_test, cod_test)
+# 1. Cek apakah item adalah data uji coba / sampah (contoh: rom_test, laplace_test, cod_test)
 def is_test_item(item_text: Any, desc_text: Any) -> bool:
     item = str(item_text or "").lower().strip()
     desc = str(desc_text or "").lower().strip()
-
     if "test" in item or "test" in desc:
         if desc == "" or desc == "-" or desc == "none" or "test" in desc:
             return True
-
     return False
 
-# Ekstraksi identitas produk/denominasi kanonikal secara universal
+# 2. Ekstraksi identitas produk/denominasi kanonikal secara universal
 def get_product_key(item_text: Any, desc_text: Any) -> str:
     item = str(item_text or "").lower().strip()
     desc = str(desc_text or "").lower().strip()
@@ -91,7 +75,7 @@ def get_product_key(item_text: Any, desc_text: Any) -> str:
 
     return clean_item if clean_item else item
 
-# Hitung skor kebersihan nama item secara universal
+# 3. Hitung skor kebersihan nama item secara universal
 def get_item_cleanliness_score(row: Dict[str, Any], item_key: str, desc_key: Optional[str], code_key: Optional[str] = None) -> float:
     desc = str(row.get(desc_key, "") or "").strip().lower() if desc_key else ""
     item = str(row.get(item_key, "") or "").strip().lower()
@@ -99,15 +83,15 @@ def get_item_cleanliness_score(row: Dict[str, Any], item_key: str, desc_key: Opt
 
     score = 0.0
 
-    # 1. Prioritaskan jika Code terisi resmi
+    # Prioritaskan jika Code terisi resmi
     if code and code not in ["-", "none", ""]:
         score += 40.0
 
-    # 2. Prioritaskan jika memiliki Deskripsi lengkap
+    # Prioritaskan jika memiliki Deskripsi lengkap
     if desc and desc not in ["-", "none", ""]:
         score += 50.0
 
-    # 3. Prioritaskan jika mengandung kata satuan mata uang resmi (diamond, voucher, bonds, robux, dll)
+    # Prioritaskan jika mengandung kata satuan mata uang resmi (diamond, voucher, bonds, robux, dll)
     unit_words = ["diamond", "voucher", "bond", "coin", "crystal", "robux", "gold", "gem", "koin", "zeny", "flower", "pass", "card"]
     for unit in unit_words:
         if unit in item:
@@ -116,18 +100,17 @@ def get_item_cleanliness_score(row: Dict[str, Any], item_key: str, desc_key: Opt
                 score += 10.0
             break
 
-    # 4. Beri penalti jika mengandung singkatan channel / promo / vendor
+    # Beri penalti jika mengandung singkatan channel / promo / vendor
     vendor_tags = ["_wd", "_dmver", "_rv_", "_gpy", "_byu", "_isat", "_telco", "_ft_", "_upo", "_dg_", "_idv", "_bns", "_promo", "_disc", "_cstm", "_tact", "_restac", "upsell", "recharge", "funpack", "fita", "mkios_", "_data", "_digipos", "digipos"]
     for tag in vendor_tags:
         if tag in item:
             score -= 15.0
 
-    # 5. Nilai lebih untuk teks yang lebih ringkas
+    # Nilai lebih untuk teks yang lebih ringkas
     score -= len(item) * 0.1
-
     return score
 
-# Pilih baris item terbaik dari kumpulan kandidat varian yang sama
+# 4. Pilih baris item terbaik dari kumpulan kandidat varian yang sama
 def pick_best_row(row_list: List[Dict[str, Any]], item_key: str, desc_key: Optional[str], code_key: Optional[str] = None) -> Dict[str, Any]:
     best_row = row_list[0]
     best_score = get_item_cleanliness_score(best_row, item_key, desc_key, code_key)
@@ -140,8 +123,14 @@ def pick_best_row(row_list: List[Dict[str, Any]], item_key: str, desc_key: Optio
 
     return best_row
 
-# Deduplikasi varian item per supplier untuk seluruh baris data
-def deduplicate_catalog_records(records: List[Dict[str, Any]]):
+# 5. Deduplikasi varian item per supplier untuk seluruh baris data katalog
+def deduplicate_catalog_records(
+    records: List[Dict[str, Any]],
+    group_keys: Optional[List[str]] = None,
+    item_key_param: Optional[str] = None,
+    desc_key_param: Optional[str] = None,
+    code_key_param: Optional[str] = None
+):
     from collections import defaultdict
 
     original_cols = [str(k) for k in records[0].keys() if not str(k).startswith("_")]
@@ -165,27 +154,27 @@ def deduplicate_catalog_records(records: List[Dict[str, Any]]):
         else:
             display_cols.append(col_name)
 
-    # Cari nama kolom yang cocok dengan loop sederhana
-    item_key = original_cols[0]
+    # Tentukan kolom acuan (gunakan parameter LLM jika ada, atau deteksi otomatis)
+    item_key = item_key_param or original_cols[0]
     supplier_key = None
     content_key = None
-    desc_key = None
-    code_key = None
+    desc_key = desc_key_param
+    code_key = code_key_param
 
     for col in original_cols:
         col_clean = str(col).lower().strip()
-        if "item" in col_clean:
+        if not item_key_param and "item" in col_clean:
             item_key = col
         elif "supplier" in col_clean or "vendor" in col_clean:
             supplier_key = col
         elif "content" in col_clean or "game" in col_clean:
             content_key = col
-        elif "description" in col_clean or "desc" in col_clean:
+        elif not desc_key_param and ("description" in col_clean or "desc" in col_clean):
             desc_key = col
-        elif "code" in col_clean or "sku" in col_clean:
+        elif not code_key_param and ("code" in col_clean or "sku" in col_clean):
             code_key = col
 
-    # 1. Kelompokkan per (Supplier, Content, Kunci Produk)
+    # Kelompokkan per (Entitas Grup, Kunci Produk)
     groups = defaultdict(list)
     for row in records:
         item_val = row.get(item_key)
@@ -195,8 +184,12 @@ def deduplicate_catalog_records(records: List[Dict[str, Any]]):
         if is_test_item(item_val, desc_val):
             continue
 
-        supp = str(row.get(supplier_key, "") or "").strip().lower() if supplier_key else ""
-        cont = str(row.get(content_key, "") or "").strip().lower() if content_key else ""
+        if group_keys:
+            entity_tuple = tuple(str(row.get(gk, "") or "").strip().lower() for gk in group_keys)
+        else:
+            supp = str(row.get(supplier_key, "") or "").strip().lower() if supplier_key else ""
+            cont = str(row.get(content_key, "") or "").strip().lower() if content_key else ""
+            entity_tuple = (supp, cont)
 
         # Jika ada kolom Code dan terisi, bersihkan Code sebagai kunci produk resmi
         code_val = str(row.get(code_key, "") or "").strip() if code_key else ""
@@ -205,162 +198,113 @@ def deduplicate_catalog_records(records: List[Dict[str, Any]]):
         else:
             prod_key = get_product_key(item_val, desc_val)
 
-        groups[(supp, cont, prod_key)].append(row)
+        groups[(entity_tuple, prod_key)].append(row)
 
-    # 2. Ambil 1 baris terbersih untuk setiap produk unik
+    # Ambil 1 baris terbersih untuk setiap produk unik
     cleaned_rows = []
-    for (supp, cont, prod_key), row_list in groups.items():
+    for (entity_tuple, prod_key), row_list in groups.items():
         best_row = pick_best_row(row_list, item_key, desc_key, code_key)
         cleaned_rows.append([best_row.get(col_name) for col_name in original_cols])
 
     return display_cols, cleaned_rows
 
-# Normalisasi data flat menjadi tabel terstruktur via LLM
+# 6. Normalisasi data flat menjadi tabel terstruktur via LLM Planner
 def normalize_dataset(records: List[Dict[str, Any]]) -> Dict[str, Any]:
     client = get_llm_client()
     if not client:
         raise ValueError("Variabel LLM_API_KEY belum disetel di file .env")
 
     model_name = get_llm_model()
-    sample_records = records[:15]
+    sample_records = records[:5]
 
-    # KASUS 1: Dataset Katalog Varian Item
-    if records and is_catalog_dataset(records[0]):
-        original_cols = [str(k) for k in records[0].keys() if not str(k).startswith("_")]
-
-        prompt = f"""Kamu adalah AI pembersih dan penormalisasi data katalog item spreadsheet.
-Diberikan baris data denormalisasi (banyak duplikat varian dan suffix promo):
+    # Minta LLM menganalisis jenis data dan menentukan strategi normalisasi secara otomatis
+    prompt = f"""Kamu adalah AI arsitek data untuk normalisasi spreadsheet.
+Analisis struktur kolom dan contoh data berikut:
 {json.dumps(sample_records, indent=2)}
 
-Tugas kamu (Normalisasi Varian Katalog):
-1. Hilangkan redundansi dan duplikasi varian dalam supplier yang sama:
-   - Jika ada beberapa baris dengan Content, Description, dan Supplier yang sama (misal 'AOV 1430 Vouchers' di supplier 'garena' yang memiliki banyak kode varian seperti 'aov_1430', 'aov_1430_dg_gpy', 'aov_1430_tact'), satukan menjadi SATU baris bersih menggunakan kode Item dasar tanpa suffix/ekor promo tambahan (contoh: 'aov_1430').
-   - Gunakan ID yang sesuai dengan baris item dasar tersebut.
-2. Pembeda antar-supplier:
-   - Jika item yang sama dijual oleh Supplier berbeda (misal 'garena' dan 'coda'), TETAP catat sebagai baris terpisah untuk masing-masing supplier.
-3. Hasilkan ringkasan hasil normalisasi.
+Tentukan strategi normalisasi terbaik:
+1. Pilih 'mode': 'catalog' jika tabel adalah daftar produk/SKU/katalog dengan varian promo dan supplier/vendor.
+   Berikan:
+   - "key_columns": daftar nama kolom pengelompokan entitas (misal ["Supplier", "Content"])
+   - "code_column": nama kolom kode master jika ada (misal "Code" atau null)
+   - "item_column": nama kolom kode item (misal "Item")
+   - "desc_column": nama kolom deskripsi (misal "Description")
+   - "erd_summary": penjelasan singkat
 
-Keluarkan format HANYA objek JSON valid:
-{{
-  "erd_summary": "Deduplikasi varian item per supplier: varian dengan suffix disatukan ke item dasar, supplier berbeda tetap dipisah.",
-  "clean_table_name": "Tabel Bersih"
-}}"""
+2. Pilih 'mode': 'erd' jika tabel adalah data transaksi datar (seperti Game, Denomination, Channel, Price) yang harus dipecah menjadi beberapa tabel relasional (Game Title, Game Denom, Channel, Game Dist Channel).
+   Berikan:
+   - "erd_summary": penjelasan alur relasi
+   - "tables": daftar tabel relasional yang dipecah (nama tabel, kolom, PK, FK, dan data baris berupa array nilai, contoh: "rows": [["Free Fire", "FF"]]).
 
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=[
-                {"role": "system", "content": "Kamu adalah analis data katalog. Hanya balas dalam format JSON yang valid."},
-                {"role": "user", "content": prompt}
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.0
-        )
-        content_data = json.loads(response.choices[0].message.content)
-        summary_text = content_data.get("erd_summary", "Deduplikasi varian item per supplier berhasil.")
-
-        # Eksekusi pembersihan menyeluruh untuk seluruh baris data
-        clean_columns, cleaned_table_rows = deduplicate_catalog_records(records)
-
-        return {
-            "erd_summary": summary_text,
-            "tables": [
-                {
-                    "table_name": "Tabel Bersih",
-                    "columns": clean_columns,
-                    "primary_key": next((k for k in clean_columns if str(k).lower().strip() == "id"), None),
-                    "foreign_keys": [],
-                    "rows": cleaned_table_rows
-                }
-            ]
-        }
-
-    # KASUS 2: Dataset Game, Denom, Channel, Harga (Normalisasi ERD 4 Tabel)
-    prompt = f"""Kamu adalah AI arsitek database untuk normalisasi tabel spreadsheet menjadi skema relasional (1NF, 2NF, 3NF / ERD).
-Diberikan baris data denormalisasi (flat table):
-{json.dumps(sample_records, indent=2)}
-
-Tugas kamu:
-Pecah data denormalisasi di atas menjadi 4 tabel relasional terstruktur:
-1. Tabel Game Title (kolom: Title, ID) -> ID berupa kode akronim huruf besar (misal 'Free Fire' -> 'FF', 'Mobile Legends' -> 'ML', 'Roblox' -> 'RB').
-2. Tabel Game Denom (kolom: ID Title, Denomination, ID DENOM) -> ID Title adalah FK ke Game Title. Nilai Denomination harus sesuai mata uang game aslinya (misal '10 diamond', '80 robux'). ID DENOM adalah PK gabungan ID Title, nominal angka, dan singkatan mata uang (gunakan 'DM' untuk diamond seperti 'FF_10_DM', 'ML_50_DM'; dan 'RBX' untuk robux seperti 'RB_80_RBX').
-3. Tabel Channel (kolom: Channel) -> daftar nama channel/toko unik (misal: Upoint, Dunia Games, Itemku).
-4. Tabel Game Dist Channel (kolom: ID DENOM, Channel, Harga) -> tabel relasi harga dengan Foreign Key 'ID DENOM' dan Foreign Key 'Channel'.
-
-Keluarkan format HANYA objek JSON dengan struktur persis seperti ini:
-{{
-  "erd_summary": "Game Title (ID) -> Game Denom (ID DENOM) -> Game Dist Channel <- Channel (Channel)",
-  "tables": [
-    {{
-      "table_name": "Game Title",
-      "columns": ["Title", "ID"],
-      "primary_key": "ID",
-      "foreign_keys": [],
-      "rows": [
-        ["Free Fire", "FF"]
-      ]
-    }},
-    {{
-      "table_name": "Game Denom",
-      "columns": ["ID Title", "Denomination", "ID DENOM"],
-      "primary_key": "ID DENOM",
-      "foreign_keys": [
-        {{
-          "column": "ID Title",
-          "references_table": "Game Title",
-          "references_column": "ID"
-        }}
-      ],
-      "rows": [
-        ["FF", "10 diamond", "FF_10_DM"]
-      ]
-    }},
-    {{
-      "table_name": "Channel",
-      "columns": ["Channel"],
-      "primary_key": "Channel",
-      "foreign_keys": [],
-      "rows": [
-        ["Upoint"]
-      ]
-    }},
-    {{
-      "table_name": "Game Dist Channel",
-      "columns": ["ID DENOM", "Channel", "Harga"],
-      "primary_key": "ID DENOM + Channel",
-      "foreign_keys": [
-        {{
-          "column": "ID DENOM",
-          "references_table": "Game Denom",
-          "references_column": "ID DENOM"
-        }},
-        {{
-          "column": "Channel",
-          "references_table": "Channel",
-          "references_column": "Channel"
-        }}
-      ],
-      "rows": [
-        ["FF_10_DM", "Upoint", 12000]
-      ]
-    }}
-  ]
-}}"""
+Keluarkan HANYA format JSON valid."""
 
     response = client.chat.completions.create(
         model=model_name,
         messages=[
-            {"role": "system", "content": "Kamu adalah arsitek normalisasi database. Hanya balas dalam format JSON yang valid."},
+            {"role": "system", "content": "Kamu adalah analis data. Hanya balas dalam format JSON yang valid."},
             {"role": "user", "content": prompt}
         ],
         response_format={"type": "json_object"},
         temperature=0.0
     )
 
-    content = response.choices[0].message.content
-    result = json.loads(content)
-    return result
+    plan = json.loads(response.choices[0].message.content)
+    mode = str(plan.get("mode", "")).lower().strip()
 
-# Buat file Excel multi-tab dari hasil normalisasi
+    # KASUS 1: Mode Katalog -> Eksekusi deduplikasi masal dengan konfigurasi dari LLM
+    if mode == "catalog" or "catalog" in mode:
+        key_cols = plan.get("key_columns")
+        code_col = plan.get("code_column")
+        item_col = plan.get("item_column")
+        desc_col = plan.get("desc_column")
+
+        clean_cols, clean_rows = deduplicate_catalog_records(
+            records,
+            group_keys=key_cols,
+            item_key_param=item_col,
+            desc_key_param=desc_col,
+            code_key_param=code_col
+        )
+
+        return {
+            "erd_summary": plan.get("erd_summary", "Deduplikasi varian katalog per supplier"),
+            "tables": [
+                {
+                    "table_name": "Tabel Bersih",
+                    "columns": clean_cols,
+                    "primary_key": next((k for k in clean_cols if str(k).lower().strip() == "id"), None),
+                    "foreign_keys": [],
+                    "rows": clean_rows
+                }
+            ]
+        }
+
+    # KASUS 2: Mode Relasional ERD (4 Tabel)
+    tables = plan.get("tables", [])
+    for tbl in tables:
+        if "table_name" not in tbl and "name" in tbl:
+            tbl["table_name"] = tbl["name"]
+        if isinstance(tbl.get("primary_key"), list):
+            tbl["primary_key"] = ", ".join(str(x) for x in tbl["primary_key"])
+
+        cols = tbl.get("columns", [])
+        raw_rows = tbl.get("rows", [])
+        formatted_rows = []
+        for r in raw_rows:
+            if isinstance(r, dict):
+                formatted_rows.append([r.get(c) for c in cols])
+            elif isinstance(r, (list, tuple)):
+                formatted_rows.append(list(r))
+            else:
+                formatted_rows.append([r])
+        tbl["rows"] = formatted_rows
+
+    return {
+        "erd_summary": plan.get("erd_summary", "Relasi normalisasi berhasil dibentuk"),
+        "tables": tables
+    }
+
+# 7. Buat file Excel multi-tab dari hasil normalisasi
 def export_normalized_to_excel_buffer(tables_data: List[Dict[str, Any]]) -> io.BytesIO:
     workbook = openpyxl.Workbook()
     workbook.remove(workbook.active)
