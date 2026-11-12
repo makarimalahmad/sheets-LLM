@@ -21,17 +21,6 @@ def get_product_key(item_text: Any, desc_text: Any) -> str:
     item = str(item_text or "").lower().strip()
     desc = str(desc_text or "").lower().strip()
 
-    # Cek pass / membership / paket khusus
-    special_passes = [
-        "twilight", "weekly", "starlight", "monthly epic", "weekly elite", 
-        "diamond pass", "aurum", "companionship", "supply pass", "grow pass", 
-        "abundance", "bounty", "fountain", "rainin", "chest o", "battle pass", 
-        "peluru", "komposit", "pemula"
-    ]
-    for pattern in special_passes:
-        if pattern in desc or pattern in item:
-            return pattern
-
     # Ambil angka nominal dari Description jika ada (Description adalah nama produk resmi)
     if desc and desc not in ["-", "none", ""]:
         d_clean = re.sub(r"\(.*?\)", "", desc)
@@ -79,33 +68,54 @@ def get_product_key(item_text: Any, desc_text: Any) -> str:
     return clean_item if clean_item else item
 
 # 3. Pilih baris item terbaik dari sekumpulan varian produk yang sama
-def pick_best_row(row_list: List[Dict[str, Any]], item_key: str, desc_key: Optional[str], code_key: Optional[str] = None) -> Dict[str, Any]:
+def pick_best_row(
+    row_list: List[Dict[str, Any]],
+    item_key: str,
+    desc_key: Optional[str],
+    code_key: Optional[str] = None,
+    extra_unit_words: Optional[List[str]] = None,
+    extra_promo_tags: Optional[List[str]] = None
+) -> Dict[str, Any]:
     unit_words = ["diamond", "voucher", "bond", "coin", "crystal", "robux", "gold", "gem", "koin", "zeny", "flower", "pass", "card"]
+    if extra_unit_words:
+        for word in extra_unit_words:
+            clean_word = str(word).lower().strip()
+            if clean_word and clean_word not in unit_words:
+                unit_words.append(clean_word)
+
     promo_tags = ["_wd", "_dmver", "_rv_", "_gpy", "_byu", "_isat", "_telco", "_ft_", "_upo", "_dg_", "_idv", "_bns", "_promo", "_disc", "_cstm", "_tact", "_restac", "upsell", "recharge", "funpack", "fita", "mkios_", "_data", "_digipos"]
+    if extra_promo_tags:
+        for tag in extra_promo_tags:
+            clean_tag = str(tag).lower().strip()
+            if clean_tag and clean_tag not in unit_words and clean_tag not in promo_tags:
+                promo_tags.append(clean_tag)
 
     def cek_prioritas(row):
         code_ada = bool(code_key and str(row.get(code_key, "") or "").strip() not in ["-", "none", ""])
         desc_ada = bool(desc_key and str(row.get(desc_key, "") or "").strip() not in ["-", "none", ""])
         item_str = str(row.get(item_key, "") or "").strip().lower()
-        nama_resmi = any(u in item_str for u in unit_words)
-        bukan_promo = not any(p in item_str for p in promo_tags)
+        nama_resmi = any(unit in item_str for unit in unit_words)
+        bukan_promo = not any(tag in item_str for tag in promo_tags)
 
         # Urutan pemenang: Code resmi -> Ada deskripsi -> Nama satuan resmi -> Bukan promo -> Teks terpendek
         return (code_ada, desc_ada, nama_resmi, bukan_promo, -len(item_str))
 
     return max(row_list, key=cek_prioritas)
 
-# 5. Deduplikasi varian item per supplier untuk seluruh baris data katalog
+# 4. Deduplikasi varian item per supplier untuk seluruh baris data katalog
 def deduplicate_catalog_records(
     records: List[Dict[str, Any]],
     group_keys: Optional[List[str]] = None,
     item_key_param: Optional[str] = None,
     desc_key_param: Optional[str] = None,
-    code_key_param: Optional[str] = None
+    code_key_param: Optional[str] = None,
+    extra_unit_words: Optional[List[str]] = None,
+    extra_promo_tags: Optional[List[str]] = None
 ):
     from collections import defaultdict
 
-    original_cols = [str(k) for k in records[0].keys() if not str(k).startswith("_")]
+    original_cols = [str(col_key) for col_key in records[0].keys() if not str(col_key).startswith("_")]
+    cols_lookup = {col_name.lower().strip(): col_name for col_name in original_cols}
 
     # Standarisasi nama kolom header: ID, Content, Item, Code, Description, Supplier
     display_cols = []
@@ -126,25 +136,42 @@ def deduplicate_catalog_records(
         else:
             display_cols.append(col_name)
 
-    # Tentukan kolom acuan (gunakan parameter LLM jika ada, atau deteksi otomatis)
-    item_key = item_key_param or original_cols[0]
+    # Validasi nama kolom dari LLM agar cocok dengan header asli
+    def resolve_col_name(candidate: Optional[str]) -> Optional[str]:
+        if not candidate:
+            return None
+        clean_cand = str(candidate).strip()
+        if clean_cand.lower() in ["null", "none", ""]:
+            return None
+        if clean_cand in original_cols:
+            return clean_cand
+        return cols_lookup.get(clean_cand.lower())
+
+    item_key = resolve_col_name(item_key_param) or original_cols[0]
+    desc_key = resolve_col_name(desc_key_param)
+    code_key = resolve_col_name(code_key_param)
     supplier_key = None
     content_key = None
-    desc_key = desc_key_param
-    code_key = code_key_param
 
     for col in original_cols:
         col_clean = str(col).lower().strip()
-        if not item_key_param and "item" in col_clean:
+        if not resolve_col_name(item_key_param) and "item" in col_clean:
             item_key = col
         elif "supplier" in col_clean or "vendor" in col_clean:
             supplier_key = col
         elif "content" in col_clean or "game" in col_clean:
             content_key = col
-        elif not desc_key_param and ("description" in col_clean or "desc" in col_clean):
+        elif not desc_key and ("description" in col_clean or "desc" in col_clean):
             desc_key = col
-        elif not code_key_param and ("code" in col_clean or "sku" in col_clean):
+        elif not code_key and ("code" in col_clean or "sku" in col_clean):
             code_key = col
+
+    resolved_group_keys = []
+    if group_keys:
+        for group_col in group_keys:
+            matched_col = resolve_col_name(group_col)
+            if matched_col:
+                resolved_group_keys.append(matched_col)
 
     # Kelompokkan per (Entitas Grup, Kunci Produk)
     groups = defaultdict(list)
@@ -156,8 +183,8 @@ def deduplicate_catalog_records(
         if is_test_item(item_val, desc_val):
             continue
 
-        if group_keys:
-            entity_tuple = tuple(str(row.get(gk, "") or "").strip().lower() for gk in group_keys)
+        if resolved_group_keys:
+            entity_tuple = tuple(str(row.get(group_col, "") or "").strip().lower() for group_col in resolved_group_keys)
         else:
             supp = str(row.get(supplier_key, "") or "").strip().lower() if supplier_key else ""
             cont = str(row.get(content_key, "") or "").strip().lower() if content_key else ""
@@ -175,12 +202,12 @@ def deduplicate_catalog_records(
     # Ambil 1 baris terbersih untuk setiap produk unik
     cleaned_rows = []
     for (entity_tuple, prod_key), row_list in groups.items():
-        best_row = pick_best_row(row_list, item_key, desc_key, code_key)
+        best_row = pick_best_row(row_list, item_key, desc_key, code_key, extra_unit_words, extra_promo_tags)
         cleaned_rows.append([best_row.get(col_name) for col_name in original_cols])
 
     return display_cols, cleaned_rows
 
-# 6. Normalisasi data flat menjadi tabel terstruktur via LLM Planner
+# 5. Normalisasi data flat menjadi tabel terstruktur via LLM Planner
 def normalize_dataset(records: List[Dict[str, Any]]) -> Dict[str, Any]:
     client = get_llm_client()
     if not client:
@@ -201,6 +228,8 @@ Tentukan strategi normalisasi terbaik:
    - "code_column": nama kolom kode master jika ada (misal "Code" atau null)
    - "item_column": nama kolom kode item (misal "Item")
    - "desc_column": nama kolom deskripsi (misal "Description")
+   - "promo_tags": daftar akhiran/kata promo yang terdeteksi di kode Item (misal ["_promo", "_disc"])
+   - "unit_words": daftar satuan produk yang terdeteksi (misal ["diamond", "voucher"])
    - "erd_summary": penjelasan singkat
 
 2. Pilih 'mode': 'erd' jika tabel adalah data transaksi datar (seperti Game, Denomination, Channel, Price) yang harus dipecah menjadi beberapa tabel relasional (Game Title, Game Denom, Channel, Game Dist Channel).
@@ -229,14 +258,24 @@ Keluarkan HANYA format JSON valid."""
         code_col = plan.get("code_column")
         item_col = plan.get("item_column")
         desc_col = plan.get("desc_column")
+        extra_units = plan.get("unit_words")
+        extra_promos = plan.get("promo_tags")
 
         clean_cols, clean_rows = deduplicate_catalog_records(
             records,
             group_keys=key_cols,
             item_key_param=item_col,
             desc_key_param=desc_col,
-            code_key_param=code_col
+            code_key_param=code_col,
+            extra_unit_words=extra_units,
+            extra_promo_tags=extra_promos
         )
+
+        primary_key_col = None
+        for col_name in clean_cols:
+            if str(col_name).lower().strip() == "id":
+                primary_key_col = col_name
+                break
 
         return {
             "erd_summary": plan.get("erd_summary", "Deduplikasi varian katalog per supplier"),
@@ -244,7 +283,7 @@ Keluarkan HANYA format JSON valid."""
                 {
                     "table_name": "Tabel Bersih",
                     "columns": clean_cols,
-                    "primary_key": next((k for k in clean_cols if str(k).lower().strip() == "id"), None),
+                    "primary_key": primary_key_col,
                     "foreign_keys": [],
                     "rows": clean_rows
                 }
@@ -257,18 +296,18 @@ Keluarkan HANYA format JSON valid."""
         if "table_name" not in tbl and "name" in tbl:
             tbl["table_name"] = tbl["name"]
         if isinstance(tbl.get("primary_key"), list):
-            tbl["primary_key"] = ", ".join(str(x) for x in tbl["primary_key"])
+            tbl["primary_key"] = ", ".join(str(key_col) for key_col in tbl["primary_key"])
 
         cols = tbl.get("columns", [])
         raw_rows = tbl.get("rows", [])
         formatted_rows = []
-        for r in raw_rows:
-            if isinstance(r, dict):
-                formatted_rows.append([r.get(c) for c in cols])
-            elif isinstance(r, (list, tuple)):
-                formatted_rows.append(list(r))
+        for row_item in raw_rows:
+            if isinstance(row_item, dict):
+                formatted_rows.append([row_item.get(col_name) for col_name in cols])
+            elif isinstance(row_item, (list, tuple)):
+                formatted_rows.append(list(row_item))
             else:
-                formatted_rows.append([r])
+                formatted_rows.append([row_item])
         tbl["rows"] = formatted_rows
 
     return {
