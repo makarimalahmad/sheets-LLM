@@ -35,9 +35,12 @@ def get_product_key(item_text: Any, desc_text: Any) -> str:
     # Ambil angka nominal dari Description jika ada (Description adalah nama produk resmi)
     if desc and desc not in ["-", "none", ""]:
         d_clean = re.sub(r"\(.*?\)", "", desc)
-        # HANYA jumlahkan jika di deskripsi format '1580 + 110' (Arena Breakout)
-        if "1580" in d_clean and "110" in d_clean:
-            return "denom_1690"
+        # Cek jika ada format penjumlahan (misal: 1580 + 110) yang hasilnya cocok dengan nama Item
+        plus_match = re.search(r"(\d+)\s*\+\s*(\d+)", d_clean)
+        if plus_match:
+            total_sum = int(plus_match.group(1)) + int(plus_match.group(2))
+            if str(total_sum) in item:
+                return f"denom_{total_sum}"
 
         # Buang tanda + dan semua teks bonus promo di belakangnya agar melebur ke base item
         d_clean = re.sub(r"\+.*", "", d_clean)
