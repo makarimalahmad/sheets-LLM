@@ -16,6 +16,31 @@ def is_test_item(item_text: Any, desc_text: Any) -> bool:
             return True
     return False
 
+# Deteksi jenis satuan mata uang game agar mata uang berbeda (misal B-Chips vs Crystals, Key vs Diamond) tidak tertukar
+def detect_currency_unit(text: str) -> str:
+    clean_text = str(text or "").lower()
+    unit_patterns = [
+        (r"\b(b-chips|b_chips|bchips|bc)\b", "bchips"),
+        (r"\b(crystals|crystal|cr)\b", "crystal"),
+        (r"\b(diamonds|diamond|dm|dmn)\b", "diamond"),
+        (r"\b(keys|key)\b", "key"),
+        (r"\b(souls|soul)\b", "soul"),
+        (r"\b(money)\b", "money"),
+        (r"\b(gems|gem)\b", "gem"),
+        (r"\b(ap)\b", "ap"),
+        (r"\b(zeny)\b", "zeny"),
+        (r"\b(big cat coins|bcc)\b", "bcc"),
+        (r"\b(coins|coin|koins|koin)\b", "coin"),
+        (r"\b(vouchers|voucher|vcr)\b", "voucher"),
+        (r"\b(bonds|bond)\b", "bond"),
+        (r"\b(tokens|token)\b", "token"),
+        (r"\b(robux|rbx)\b", "robux")
+    ]
+    for pattern, unit_label in unit_patterns:
+        if re.search(pattern, clean_text):
+            return unit_label
+    return ""
+
 # 2. Ekstraksi identitas produk/denominasi kanonikal secara universal
 def get_product_key(item_text: Any, desc_text: Any) -> str:
     item = str(item_text or "").lower().strip()
@@ -29,7 +54,8 @@ def get_product_key(item_text: Any, desc_text: Any) -> str:
         if plus_match:
             total_sum = int(plus_match.group(1)) + int(plus_match.group(2))
             if str(total_sum) in item:
-                return f"denom_{total_sum}"
+                unit_type = detect_currency_unit(f"{d_clean} {item}")
+                return f"denom_{total_sum}_{unit_type}" if unit_type else f"denom_{total_sum}"
 
         # Buang tanda + dan semua teks bonus promo di belakangnya agar melebur ke base item
         d_clean = re.sub(r"\+.*", "", d_clean)
@@ -49,7 +75,8 @@ def get_product_key(item_text: Any, desc_text: Any) -> str:
             if num_val == "169": num_val = "170"
             elif num_val == "282": num_val = "296"
             elif num_val == "56": num_val = "59"
-            return f"denom_{num_val}"
+            unit_type = detect_currency_unit(f"{d_clean} {item}")
+            return f"denom_{num_val}_{unit_type}" if unit_type else f"denom_{num_val}"
         else:
             return d_clean.strip()
 
@@ -63,7 +90,8 @@ def get_product_key(item_text: Any, desc_text: Any) -> str:
     if combo_match:
         v1, v2 = int(combo_match.group(1)), int(combo_match.group(2))
         if v2 <= 300:
-            return f"denom_{v1 + v2}"
+            unit_type = detect_currency_unit(item)
+            return f"denom_{v1 + v2}_{unit_type}" if unit_type else f"denom_{v1 + v2}"
 
     nums = re.findall(r"\d+", clean_item)
     if nums:
@@ -71,7 +99,8 @@ def get_product_key(item_text: Any, desc_text: Any) -> str:
         if num_val == "169": num_val = "170"
         elif num_val == "282": num_val = "296"
         elif num_val == "56": num_val = "59"
-        return f"denom_{num_val}"
+        unit_type = detect_currency_unit(item)
+        return f"denom_{num_val}_{unit_type}" if unit_type else f"denom_{num_val}"
 
     return clean_item if clean_item else item
 
@@ -181,8 +210,9 @@ def deduplicate_catalog_records(
             if matched_col:
                 resolved_group_keys.append(matched_col)
 
-    # Kelompokkan per (Entitas Grup, Kunci Produk)
-    groups = defaultdict(list)
+    # Langkah 1: Gabungkan baris dengan Code resmi yang sama persis per (Entitas Grup, Cleaned Code)
+    step1_groups = defaultdict(list)
+    no_code_rows = []
     for row in records:
         item_val = row.get(item_key)
         desc_val = row.get(desc_key) if desc_key else ""
@@ -198,18 +228,37 @@ def deduplicate_catalog_records(
             cont = str(row.get(content_key, "") or "").strip().lower() if content_key else ""
             entity_tuple = (supp, cont)
 
-        # Jika ada kolom Code dan terisi, bersihkan Code sebagai kunci produk resmi
-        code_val = str(row.get(code_key, "") or "").strip() if code_key else ""
-        if code_val and code_val.lower() not in ["-", "none", ""]:
-            prod_key = get_product_key(code_val, desc_val)
+        code_val = str(row.get(code_key, "") or "").strip().lower() if code_key else ""
+        if code_val and code_val not in ["-", "none", ""]:
+            clean_code = re.sub(r"(_data|_promo.*|_disc.*|_new\d*)$", "", code_val)
+            step1_groups[(entity_tuple, clean_code)].append(row)
         else:
-            prod_key = get_product_key(item_val, desc_val)
+            no_code_rows.append(row)
 
-        groups[(entity_tuple, prod_key)].append(row)
+    merged_by_code = [
+        pick_best_row(row_list, item_key, desc_key, code_key, extra_unit_words, extra_promo_tags)
+        for row_list in step1_groups.values()
+    ] + no_code_rows
+
+    # Langkah 2: Gabungkan varian alias produk yang memiliki kunci produk & satuan yang sama
+    step2_groups = defaultdict(list)
+    for row in merged_by_code:
+        item_val = row.get(item_key)
+        desc_val = row.get(desc_key) if desc_key else ""
+
+        if resolved_group_keys:
+            entity_tuple = tuple(str(row.get(group_col, "") or "").strip().lower() for group_col in resolved_group_keys)
+        else:
+            supp = str(row.get(supplier_key, "") or "").strip().lower() if supplier_key else ""
+            cont = str(row.get(content_key, "") or "").strip().lower() if content_key else ""
+            entity_tuple = (supp, cont)
+
+        prod_key = get_product_key(item_val, desc_val)
+        step2_groups[(entity_tuple, prod_key)].append(row)
 
     # Ambil 1 baris terbersih untuk setiap produk unik
     cleaned_rows = []
-    for (entity_tuple, prod_key), row_list in groups.items():
+    for (entity_tuple, prod_key), row_list in step2_groups.items():
         best_row = pick_best_row(row_list, item_key, desc_key, code_key, extra_unit_words, extra_promo_tags)
         cleaned_rows.append([best_row.get(col_name) for col_name in original_cols])
 

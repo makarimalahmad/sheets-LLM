@@ -96,5 +96,19 @@ class TestMultiSheetHarmonization(unittest.TestCase):
         coda_1430 = [r for r in clean_table["rows"] if r[2] == "aov_1430" and r[4] == "coda"]
         self.assertEqual(len(coda_1430), 1)
 
+    def test_same_code_and_distinct_currencies(self):
+        from app.normalizer import deduplicate_catalog_records
+        rows = [
+            {"ID": 107, "Content": "mobile_legends", "Item": "blanja-v2-12-diamond", "Code": "SKU_ML_12", "Description": None, "Supplier": "moonton"},
+            {"ID": 74, "Content": "mobile_legends", "Item": "v2_mlbb_12_diamond", "Code": "SKU_ML_12", "Description": "MLBB 12 Diamonds", "Supplier": "moonton"},
+            {"ID": 2618, "Content": "honkai_impact_3_global", "Item": "HI3GD_360_1320_BC", "Code": "HI3_1320_BC", "Description": "Honkai Impact 3 (Global) 1320 B-Chips", "Supplier": "coda"},
+            {"ID": 2627, "Content": "honkai_impact_3_global", "Item": "HI3GD_360_1320_CR", "Code": "HI3_1320_CR", "Description": "Honkai Impact 3 (Global) 1320 Crystals", "Supplier": "coda"}
+        ]
+        cols, clean = deduplicate_catalog_records(rows)
+        self.assertEqual(len(clean), 3)
+        ml_items = [r for r in clean if r[1] == "mobile_legends"]
+        self.assertEqual(len(ml_items), 1)
+        self.assertEqual(ml_items[0][0], 74)
+
 if __name__ == "__main__":
     unittest.main()
