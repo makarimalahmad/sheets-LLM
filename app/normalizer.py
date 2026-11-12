@@ -34,6 +34,13 @@ def get_product_key(item_text: Any, desc_text: Any) -> str:
         # Buang tanda + dan semua teks bonus promo di belakangnya agar melebur ke base item
         d_clean = re.sub(r"\+.*", "", d_clean)
         d_clean = re.sub(r"\b(funpack|langganan|fita|promo|blanja|vcr|voucher|disc)\b", "", d_clean)
+        d_clean = re.sub(r"\s+", " ", d_clean).strip()
+
+        # Jika deskripsi adalah paket/pass/durasi/multiplier (misal: x2, x3, Pass, Card, Hari),
+        # jangan diubah menjadi denom_<angka> agar tidak bertabrakan dengan nominal murni (contoh: x3 != 3 Diamonds)
+        if re.search(r"\b(x\d+|pass|card|paket|bundle|fund|hari|days|bulan|minggu|plan|member|service|privilege|elite|monthly|weekly)\b", d_clean):
+            return d_clean
+
         nums = re.findall(r"\d+", d_clean)
         if nums:
             num_val = nums[0]
