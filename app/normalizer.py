@@ -91,53 +91,52 @@ def get_product_key(item_text: Any, desc_text: Any) -> str:
 
     return clean_item if clean_item else item
 
-# Fungsi pembantu untuk memeriksa apakah nama item mengandung kata promo atau channel
-def is_promo_item(item_name: str) -> bool:
-    promo_tags = ["promo", "disc", "spend", "gpy", "tact", "funpack", "fita", "cstm", "ctm", "dtu_", "mkios_", "ndispecial", "ndione"]
-    for tag in promo_tags:
-        if tag in item_name:
-            return True
-    return False
+# Hitung skor kebersihan nama item secara universal
+def get_item_cleanliness_score(row: Dict[str, Any], item_key: str, desc_key: Optional[str], code_key: Optional[str] = None) -> float:
+    desc = str(row.get(desc_key, "") or "").strip().lower() if desc_key else ""
+    item = str(row.get(item_key, "") or "").strip().lower()
+    code = str(row.get(code_key, "") or "").strip() if code_key else ""
+
+    score = 0.0
+
+    # 1. Prioritaskan jika Code terisi resmi
+    if code and code not in ["-", "none", ""]:
+        score += 40.0
+
+    # 2. Prioritaskan jika memiliki Deskripsi lengkap
+    if desc and desc not in ["-", "none", ""]:
+        score += 50.0
+
+    # 3. Prioritaskan jika mengandung kata satuan mata uang resmi (diamond, voucher, bonds, robux, dll)
+    unit_words = ["diamond", "voucher", "bond", "coin", "crystal", "robux", "gold", "gem", "koin", "zeny", "flower", "pass", "card"]
+    for unit in unit_words:
+        if unit in item:
+            score += 20.0
+            if unit in desc:
+                score += 10.0
+            break
+
+    # 4. Beri penalti jika mengandung singkatan channel / promo / vendor
+    vendor_tags = ["_wd", "_dmver", "_rv_", "_gpy", "_byu", "_isat", "_telco", "_ft_", "_upo", "_dg_", "_idv", "_bns", "_promo", "_disc", "_cstm", "_tact", "_restac", "upsell", "recharge", "funpack", "fita", "mkios_"]
+    for tag in vendor_tags:
+        if tag in item:
+            score -= 15.0
+
+    # 5. Nilai lebih untuk teks yang lebih ringkas
+    score -= len(item) * 0.1
+
+    return score
 
 # Pilih baris item terbaik dari kumpulan kandidat varian yang sama
 def pick_best_row(row_list: List[Dict[str, Any]], item_key: str, desc_key: Optional[str], code_key: Optional[str] = None) -> Dict[str, Any]:
     best_row = row_list[0]
+    best_score = get_item_cleanliness_score(best_row, item_key, desc_key, code_key)
 
-    for current_row in row_list:
-        # Prioritas 0: Pilih yang memiliki Code resmi terisi jika ada kolom Code
-        current_code = str(current_row.get(code_key, "") or "").strip() if code_key else ""
-        best_code = str(best_row.get(code_key, "") or "").strip() if code_key else ""
-        if current_code and not best_code:
+    for current_row in row_list[1:]:
+        current_score = get_item_cleanliness_score(current_row, item_key, desc_key, code_key)
+        if current_score > best_score:
             best_row = current_row
-            continue
-        elif not current_code and best_code:
-            continue
-
-        current_desc = str(current_row.get(desc_key, "") or "").strip()
-        best_desc = str(best_row.get(desc_key, "") or "").strip()
-        current_item = str(current_row.get(item_key, "") or "").strip().lower()
-        best_item = str(best_row.get(item_key, "") or "").strip().lower()
-
-        # Prioritas 1: Pilih yang memiliki deskripsi lengkap
-        if current_desc and not best_desc:
-            best_row = current_row
-            continue
-        elif not current_desc and best_desc:
-            continue
-
-        # Prioritas 2: Hindari nama yang mengandung kata promo atau channel distributor
-        current_is_promo = is_promo_item(current_item)
-        best_is_promo = is_promo_item(best_item)
-
-        if not current_is_promo and best_is_promo:
-            best_row = current_row
-            continue
-        elif current_is_promo and not best_is_promo:
-            continue
-
-        # Prioritas 3: Pilih nama item yang lebih pendek
-        if len(current_item) < len(best_item):
-            best_row = current_row
+            best_score = current_score
 
     return best_row
 
