@@ -51,18 +51,17 @@ def get_product_key(item_text: Any, desc_text: Any) -> str:
     # Ambil angka nominal dari Description jika ada (Description adalah nama produk resmi)
     if desc and desc not in ["-", "none", ""]:
         d_clean = re.sub(r"\(.*?\)", "", desc)
-        # Jika ada format bonus penjumlahan (misal: 11+1 Diamonds -> 12, 1580+110 Bonds -> 1690, 28+44+85 -> 157)
-        plus_match = re.search(r"\d+(?:\s*\+\s*\d+)+", d_clean)
-        if plus_match:
-            plus_nums = [int(x) for x in re.findall(r"\d+", plus_match.group(0))]
-            if plus_nums:
-                return f"denom_{sum(plus_nums)}"
+        # HANYA jumlahkan jika di deskripsi format '1580 + 110' (Arena Breakout)
+        if "1580" in d_clean and "110" in d_clean:
+            return "denom_1690"
 
+        # Buang tanda + dan semua teks bonus promo di belakangnya agar melebur ke base item
         d_clean = re.sub(r"\+.*", "", d_clean)
         d_clean = re.sub(r"\b(funpack|langganan|fita|promo|blanja|vcr|voucher|disc)\b", "", d_clean)
         nums = re.findall(r"\d+", d_clean)
         if nums:
             num_val = nums[0]
+            # Standarisasi alias nominal kembar (169 -> 170, 282 -> 296, 56 -> 59)
             if num_val == "169": num_val = "170"
             elif num_val == "282": num_val = "296"
             elif num_val == "56": num_val = "59"
