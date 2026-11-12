@@ -29,7 +29,7 @@ def detect_currency_unit(text: str) -> str:
         (r"\b(gems|gem)\b", "gem"),
         (r"\b(ap)\b", "ap"),
         (r"\b(zeny)\b", "zeny"),
-        (r"\b(big cat coins|bcc)\b", "bcc"),
+        (r"(big\s*cat\s*coins|\bbcc\b)", "bcc"),
         (r"\b(coins|coin|koins|koin)\b", "coin"),
         (r"\b(vouchers|voucher|vcr)\b", "voucher"),
         (r"\b(bonds|bond)\b", "bond"),
