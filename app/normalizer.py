@@ -51,11 +51,12 @@ def get_product_key(item_text: Any, desc_text: Any) -> str:
     # Ambil angka nominal dari Description jika ada (Description adalah nama produk resmi)
     if desc and desc not in ["-", "none", ""]:
         d_clean = re.sub(r"\(.*?\)", "", desc)
-        # Jika ada format bonus penjumlahan (misal: 11+1 Diamonds -> 12, 1580+110 Bonds -> 1690)
-        plus_match = re.search(r"(\d+)\s*\+\s*(\d+)", d_clean)
+        # Jika ada format bonus penjumlahan (misal: 11+1 Diamonds -> 12, 1580+110 Bonds -> 1690, 28+44+85 -> 157)
+        plus_match = re.search(r"\d+(?:\s*\+\s*\d+)+", d_clean)
         if plus_match:
-            total_nominal = int(plus_match.group(1)) + int(plus_match.group(2))
-            return f"denom_{total_nominal}"
+            plus_nums = [int(x) for x in re.findall(r"\d+", plus_match.group(0))]
+            if plus_nums:
+                return f"denom_{sum(plus_nums)}"
 
         d_clean = re.sub(r"\+.*", "", d_clean)
         d_clean = re.sub(r"\b(funpack|langganan|fita|promo|blanja|vcr|voucher|disc)\b", "", d_clean)
@@ -72,7 +73,7 @@ def get_product_key(item_text: Any, desc_text: Any) -> str:
     # Jika Description kosong atau tidak ada angka, cari angka dari nama Item
     clean_item = re.sub(r"^(dgd_|v\d+_|v\d+-|np_|mkios_|nontelco_|dtu_|mcash_p_|promobl_|blanja-v\d+-|diamond_telkomselidr_|star_telkomselidr_)", "", item)
     clean_item = re.sub(r"^(mlbb_|freefire_|aov_|cod_|rom_)", "", clean_item)
-    clean_item = re.sub(r"(_diamonds|_diamond|_voucher|_vcr|_disc.*|_promo.*|_dg.*|_ndione|_ndispecial|_new\d*|_tact|_restac|_fntch|_rv_s|_ioh|_idv|_mytsel|_bns.*|_promoupoint|_funpack.*|_fita.*)$", "", clean_item)
+    clean_item = re.sub(r"(_diamonds|_diamond|_voucher|_vcr|_disc.*|_promo.*|_dg.*|_ndione|_ndispecial|_new\d*|_tact|_restac|_fntch|_rv_s|_ioh|_idv|_mytsel|_bns.*|_promoupoint|_funpack.*|_fita.*|_data|_digipos.*)$", "", clean_item)
 
     # Deteksi combo item: DTU_MLBB_11_1 -> 12 (angka kedua adalah bonus wajar <= 300)
     combo_match = re.search(r"(\d+)_(\d+)", clean_item)
@@ -117,7 +118,7 @@ def get_item_cleanliness_score(row: Dict[str, Any], item_key: str, desc_key: Opt
             break
 
     # 4. Beri penalti jika mengandung singkatan channel / promo / vendor
-    vendor_tags = ["_wd", "_dmver", "_rv_", "_gpy", "_byu", "_isat", "_telco", "_ft_", "_upo", "_dg_", "_idv", "_bns", "_promo", "_disc", "_cstm", "_tact", "_restac", "upsell", "recharge", "funpack", "fita", "mkios_"]
+    vendor_tags = ["_wd", "_dmver", "_rv_", "_gpy", "_byu", "_isat", "_telco", "_ft_", "_upo", "_dg_", "_idv", "_bns", "_promo", "_disc", "_cstm", "_tact", "_restac", "upsell", "recharge", "funpack", "fita", "mkios_", "_data", "_digipos", "digipos"]
     for tag in vendor_tags:
         if tag in item:
             score -= 15.0
