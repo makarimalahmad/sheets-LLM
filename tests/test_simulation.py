@@ -125,5 +125,14 @@ class TestMultiSheetHarmonization(unittest.TestCase):
         self.assertEqual(len(aov_items), 1)
         self.assertEqual(aov_items[0][2], "aov_230")
 
+    def test_star_and_diamond_telkomselidr_separated(self):
+        from app.normalizer import deduplicate_catalog_records
+        rows = [
+            {"ID": 23, "Content": "mobile_legends", "Item": "diamond_TelkomselIDR_250000", "Code": "SKU_DM_250K", "Description": None, "Supplier": "moonton"},
+            {"ID": 27, "Content": "mobile_legends", "Item": "star_TelkomselIDR_250000", "Code": "SKU_STAR_250K", "Description": None, "Supplier": "moonton"}
+        ]
+        cols, clean = deduplicate_catalog_records(rows)
+        self.assertEqual(len(clean), 2)
+
 if __name__ == "__main__":
     unittest.main()

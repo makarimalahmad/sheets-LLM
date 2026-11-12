@@ -16,12 +16,13 @@ def is_test_item(item_text: Any, desc_text: Any) -> bool:
             return True
     return False
 
-# Deteksi jenis satuan mata uang game agar mata uang berbeda (misal B-Chips vs Crystals, Key vs Diamond) tidak tertukar
+# Deteksi jenis satuan mata uang game agar mata uang berbeda (misal B-Chips vs Crystals, Starlight vs Diamond) tidak tertukar
 def detect_currency_unit(text: str) -> str:
-    clean_text = str(text or "").lower()
+    clean_text = re.sub(r"[_\-]+", " ", str(text or "").lower())
     unit_patterns = [
-        (r"\b(b-chips|b_chips|bchips|bc)\b", "bchips"),
+        (r"\b(b-chips|b chips|bchips|bc)\b", "bchips"),
         (r"\b(crystals|crystal|cr)\b", "crystal"),
+        (r"\b(starlight|star)\b", "starlight"),
         (r"\b(diamonds|diamond|dm|dmn)\b", "diamond"),
         (r"\b(keys|key)\b", "key"),
         (r"\b(souls|soul)\b", "soul"),
