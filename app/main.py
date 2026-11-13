@@ -257,14 +257,27 @@ async def normalize_table_data(req: Optional[NormalizeRequest] = None):
         # Tarik data mentah secara langsung dengan nama kolom asli tanpa diubah AI Tab 1
         raw_sheets = await fetch_raw_sheets_payload(req.sheet_url)
         for sheet_item in raw_sheets:
+            has_channel_or_supp = any("channel" in str(h).lower() or "supplier" in str(h).lower() or "vendor" in str(h).lower() for h in sheet_item.headers)
             for row in sheet_item.rows:
-                record: Dict[str, Any] = {"_source_sheet": sheet_item.sheet_name}
+                record: Dict[str, Any] = {}
+                # Jika ada lebih dari 1 sheet dan nama channel/supplier tidak ada di header, gunakan nama sheet sebagai Channel!
+                if not has_channel_or_supp and len(raw_sheets) > 1:
+                    record["Channel"] = sheet_item.sheet_name
+                else:
+                    record["_source_sheet"] = sheet_item.sheet_name
+
                 for col_index, col_name in enumerate(sheet_item.headers):
                     if col_index < len(row):
                         record[col_name] = parse_cell_value(row[col_index])
                 records_to_normalize.append(record)
     elif LATEST_MEMORY_DATA and LATEST_MEMORY_DATA.get("records"):
-        records_to_normalize = LATEST_MEMORY_DATA.get("records", [])
+        raw_mem_records = LATEST_MEMORY_DATA.get("records", [])
+        has_channel_in_mem = any("channel" in str(k).lower() for k in (raw_mem_records[0].keys() if raw_mem_records else []))
+        for mem_row in raw_mem_records:
+            row_dict = dict(mem_row)
+            if not has_channel_in_mem and "_source_sheet" in row_dict:
+                row_dict["Channel"] = row_dict.pop("_source_sheet")
+            records_to_normalize.append(row_dict)
 
     if not records_to_normalize:
         raise HTTPException(status_code=400, detail="Tempel link Google Sheets terlebih dahulu.")

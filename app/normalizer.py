@@ -279,7 +279,8 @@ def normalize_dataset(records: List[Dict[str, Any]]) -> Dict[str, Any]:
         raise ValueError("Variabel LLM_API_KEY belum disetel di file .env")
 
     model_name = get_llm_model()
-    sample_records = records[:5]
+    # Kirim seluruh baris jika data kecil (kasus ERD 12-30 baris) agar seluruh kombinasi channel terlihat, atau 15 baris jika katalog besar
+    sample_records = records if len(records) <= 30 else records[:15]
 
     # Minta LLM menganalisis jenis data dan menentukan strategi normalisasi secara otomatis
     prompt = f"""Kamu adalah AI arsitek data untuk normalisasi spreadsheet.
@@ -297,10 +298,14 @@ Tentukan strategi normalisasi terbaik:
    - "unit_words": daftar satuan produk yang terdeteksi (misal ["diamond", "voucher"])
    - "erd_summary": penjelasan singkat
 
-2. Pilih 'mode': 'erd' jika tabel adalah data transaksi datar (seperti Game, Denomination, Channel, Price) yang harus dipecah menjadi beberapa tabel relasional (Game Title, Game Denom, Channel, Game Dist Channel).
+2. Pilih 'mode': 'erd' jika tabel adalah data transaksi datar (seperti Game Title, Denomination, Channel, Price) yang harus dipecah menjadi 4 tabel relasional terstruktur:
+   - Tabel Game Title (kolom: Title, ID) -> ID berupa kode akronim huruf besar (misal 'Free Fire' -> 'FF', 'Mobile Legends' -> 'ML', 'Roblox' -> 'RB').
+   - Tabel Game Denom (kolom: ID Title, Denomination, ID DENOM) -> ID Title adalah FK ke Game Title. Nilai Denomination harus sesuai mata uang game aslinya (misal '10 diamond', '80 robux'). ID DENOM adalah PK gabungan ID Title, nominal angka, dan singkatan mata uang (gunakan 'DM' untuk diamond seperti 'FF_10_DM', 'ML_50_DM'; dan 'RBX' untuk robux seperti 'RB_80_RBX').
+   - Tabel Channel (kolom: Channel) -> daftar nama channel/toko unik (misal: Upoint, Dunia Games, Itemku).
+   - Tabel Game Dist Channel (kolom: ID DENOM, Channel, Harga) -> tabel relasi harga dengan Foreign Key 'ID DENOM' dan Foreign Key 'Channel'.
    Berikan:
-   - "erd_summary": penjelasan alur relasi
-   - "tables": daftar tabel relasional yang dipecah (nama tabel, kolom, PK, FK, dan data baris berupa array nilai, contoh: "rows": [["Free Fire", "FF"]]).
+   - "erd_summary": "Game Title (ID) -> Game Denom (ID DENOM) -> Game Dist Channel (ID DENOM, Channel, Harga) -> Channel (Channel)"
+   - "tables": daftar 4 tabel relasional di atas lengkap dengan kolom, PK, FK, dan data barisnya berupa array nilai.
 
 Keluarkan HANYA format JSON valid."""
 
